@@ -1,0 +1,4 @@
+pygame-ce<3,>=2.5
+
+[test]
+pytest<9,>=8

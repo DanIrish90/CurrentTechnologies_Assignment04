@@ -1,0 +1,10 @@
+README.md
+pyproject.toml
+src/game/__init__.py
+src/game/config.py
+src/i_am_from_the_government.egg-info/PKG-INFO
+src/i_am_from_the_government.egg-info/SOURCES.txt
+src/i_am_from_the_government.egg-info/dependency_links.txt
+src/i_am_from_the_government.egg-info/requires.txt
+src/i_am_from_the_government.egg-info/top_level.txt
+src/presentation/__init__.py

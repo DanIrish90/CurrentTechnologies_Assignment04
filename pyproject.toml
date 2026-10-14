@@ -1,0 +1,18 @@
+[project]
+name = "i-am-from-the-government"
+version = "0.1.0"
+description = "A satirical top-down survival game about escalating bureaucracy"
+requires-python = ">=3.12"
+dependencies = [
+    "pygame-ce>=2.5,<3",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8,<9",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "src"]
+addopts = "-ra"
