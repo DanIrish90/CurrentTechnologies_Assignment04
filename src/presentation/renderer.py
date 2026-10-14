@@ -1,4 +1,4 @@
-"""Pygame-ce rendering for the placeholder first slice."""
+"""Pygame-ce rendering for the playable game world and UI."""
 
 from __future__ import annotations
 
@@ -10,6 +10,8 @@ from game.camera import Camera
 from game.geometry import Rect, Vector2
 from game.state import GameState, UiSnapshot, ui_snapshot
 
+from .character_animation import CharacterAnimator, character_sprite_rect
+
 
 def _screen_rect(world_rect: Rect, camera: Camera) -> pygame.Rect:
     return pygame.Rect(
@@ -20,7 +22,7 @@ def _screen_rect(world_rect: Rect, camera: Camera) -> pygame.Rect:
     )
 
 
-def render(screen: pygame.Surface, state: GameState) -> None:
+def render(screen: pygame.Surface, state: GameState, character_animation: CharacterAnimator) -> None:
     """Draw world and UI without mutating authoritative state."""
 
     screen.fill(config.WORLD_COLOR)
@@ -69,10 +71,8 @@ def render(screen: pygame.Surface, state: GameState) -> None:
             screen.blit(servant_font.render(status, True, config.UI_TEXT_COLOR), servant_rect.move(3, 38))
 
     player_rect = _screen_rect(state.player.bounds, camera)
-    pygame.draw.rect(screen, config.PLAYER_COLOR, player_rect)
-    pygame.draw.rect(screen, config.PLAYER_OUTLINE_COLOR, player_rect, width=2)
-    player_font = pygame.font.Font(None, 18)
-    screen.blit(player_font.render("YOU", True, config.UI_TEXT_COLOR), player_rect.move(4, 7))
+    sprite_rect = character_sprite_rect(character_animation.current_frame, player_rect)
+    screen.blit(character_animation.current_frame, sprite_rect)
     snapshot = ui_snapshot(state)
     _draw_ui(screen, snapshot)
     if snapshot.fishing_visible:

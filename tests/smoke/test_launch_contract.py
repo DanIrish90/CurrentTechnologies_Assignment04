@@ -82,15 +82,17 @@ def test_fishing_pond_cast_and_reward_contract() -> None:
 
 def test_countdown_overlay_renders_during_rest_without_display_errors() -> None:
     import pygame
+    from presentation.character_animation import CharacterAnimator, load_character_frames
     from presentation.renderer import render
 
     pygame.display.init()
     pygame.font.init()
+    pygame.display.set_mode((1, 1))
     screen = pygame.Surface((VIEWPORT_WIDTH, VIEWPORT_HEIGHT))
     state = create_game_state()
     carrying, _ = collect_initial_document(state.workflow)
     completed, _ = handover(carrying, "servant-1")
     rest = replace(state, workflow=completed, player=state.player.at(Vector2(100, 840)))
-    render(screen, rest)
+    render(screen, rest, CharacterAnimator(load_character_frames()))
     pygame.font.quit()
     pygame.display.quit()

@@ -9,6 +9,7 @@ from game.geometry import Vector2
 from game.input_state import InputState, input_from_events
 from game.state import create_game_state, update_game_state
 
+from .character_animation import CharacterAnimator, load_character_frames
 from .renderer import render
 
 
@@ -19,6 +20,7 @@ def run() -> None:
     clock = pygame.time.Clock()
     state = create_game_state(Vector2(*screen.get_size()))
     input_state = InputState()
+    character_animation = CharacterAnimator(load_character_frames())
 
     try:
         while state.running:
@@ -26,10 +28,16 @@ def run() -> None:
             input_state = input_from_events(events, input_state)
             elapsed_seconds = clock.tick(config.TARGET_FPS) / 1000.0
             viewport = Vector2(*screen.get_size())
+            previous_state = state
             state = update_game_state(state, input_state, elapsed_seconds, viewport)
+            character_animation.update(
+                previous_state.player.position,
+                state.player.position,
+                elapsed_seconds,
+            )
             input_state = input_state.clear_interaction()
             input_state = input_state.clear_mouse_click()
-            render(screen, state)
+            render(screen, state, character_animation)
             pygame.display.flip()
     finally:
         pygame.quit()
