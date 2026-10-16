@@ -9,6 +9,7 @@ from game.geometry import Vector2
 from game.input_state import InputState, input_from_events
 from game.state import create_game_state, update_game_state
 
+from .bureaucrat_animation import BureaucratAnimationManager, load_bureaucrat_frames
 from .character_animation import CharacterAnimator, load_character_frames
 from .renderer import render
 
@@ -21,6 +22,7 @@ def run() -> None:
     state = create_game_state(Vector2(*screen.get_size()))
     input_state = InputState()
     character_animation = CharacterAnimator(load_character_frames())
+    bureaucrat_animation = BureaucratAnimationManager(load_bureaucrat_frames())
 
     try:
         while state.running:
@@ -35,9 +37,11 @@ def run() -> None:
                 state.player.position,
                 elapsed_seconds,
             )
+            servants = state.workflow.definition.servants if state.workflow is not None else ()
+            bureaucrat_animation.update(servants, elapsed_seconds)
             input_state = input_state.clear_interaction()
             input_state = input_state.clear_mouse_click()
-            render(screen, state, character_animation)
+            render(screen, state, character_animation, bureaucrat_animation)
             pygame.display.flip()
     finally:
         pygame.quit()

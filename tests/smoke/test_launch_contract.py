@@ -82,6 +82,7 @@ def test_fishing_pond_cast_and_reward_contract() -> None:
 
 def test_countdown_overlay_renders_during_rest_without_display_errors() -> None:
     import pygame
+    from presentation.bureaucrat_animation import BureaucratAnimationManager, load_bureaucrat_frames
     from presentation.character_animation import CharacterAnimator, load_character_frames
     from presentation.renderer import render
 
@@ -93,6 +94,13 @@ def test_countdown_overlay_renders_during_rest_without_display_errors() -> None:
     carrying, _ = collect_initial_document(state.workflow)
     completed, _ = handover(carrying, "servant-1")
     rest = replace(state, workflow=completed, player=state.player.at(Vector2(100, 840)))
-    render(screen, rest, CharacterAnimator(load_character_frames()))
+    bureaucrat_animation = BureaucratAnimationManager(load_bureaucrat_frames())
+    bureaucrat_animation.update(rest.workflow.definition.servants, 0)
+    render(
+        screen,
+        rest,
+        CharacterAnimator(load_character_frames()),
+        bureaucrat_animation,
+    )
     pygame.font.quit()
     pygame.display.quit()

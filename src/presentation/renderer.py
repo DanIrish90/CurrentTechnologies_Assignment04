@@ -10,6 +10,7 @@ from game.camera import Camera
 from game.geometry import Rect, Vector2
 from game.state import GameState, UiSnapshot, ui_snapshot
 
+from .bureaucrat_animation import BureaucratAnimationManager, bureaucrat_sprite_rect
 from .character_animation import CharacterAnimator, character_sprite_rect
 
 
@@ -22,7 +23,12 @@ def _screen_rect(world_rect: Rect, camera: Camera) -> pygame.Rect:
     )
 
 
-def render(screen: pygame.Surface, state: GameState, character_animation: CharacterAnimator) -> None:
+def render(
+    screen: pygame.Surface,
+    state: GameState,
+    character_animation: CharacterAnimator,
+    bureaucrat_animation: BureaucratAnimationManager,
+) -> None:
     """Draw world and UI without mutating authoritative state."""
 
     screen.fill(config.WORLD_COLOR)
@@ -63,9 +69,8 @@ def render(screen: pygame.Surface, state: GameState, character_animation: Charac
         for servant in state.workflow.definition.servants:
             servant_bounds = Rect(servant.position.x - 24, servant.position.y - 30, 48, 60)
             servant_rect = _screen_rect(servant_bounds, camera)
-            color = config.SERVED_COLOR if servant.served else config.CIVIL_SERVANT_COLOR
-            pygame.draw.rect(screen, color, servant_rect)
-            pygame.draw.rect(screen, config.UI_TEXT_COLOR, servant_rect, width=2)
+            frame = bureaucrat_animation.frame_for(servant.id)
+            screen.blit(frame, bureaucrat_sprite_rect(frame, servant_rect))
             screen.blit(servant_font.render(f"S{servant.step_order}", True, config.UI_TEXT_COLOR), servant_rect.move(16, 8))
             status = "SERVED" if servant.served else "PENDING"
             screen.blit(servant_font.render(status, True, config.UI_TEXT_COLOR), servant_rect.move(3, 38))
