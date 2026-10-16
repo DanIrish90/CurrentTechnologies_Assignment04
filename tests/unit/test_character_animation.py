@@ -26,11 +26,11 @@ def _frames() -> tuple[pygame.Surface, ...]:
     return load_character_frames().rows[0]
 
 
-def test_tileset_contains_twelve_native_size_frames() -> None:
+def test_character_frames_are_scaled_to_world_size() -> None:
     frames = load_character_frames()
     assert len(frames.rows) == 3
     assert all(len(row) == 4 for row in frames.rows)
-    assert all(frame.get_size() == (84, 128) for row in frames.rows for frame in row)
+    assert all(frame.get_size() == (21, 32) for row in frames.rows for frame in row)
 
 
 def test_split_rejects_unexpected_sheet_dimensions() -> None:
@@ -97,8 +97,17 @@ def test_right_movement_uses_mirrored_side_view() -> None:
 
 
 def test_sprite_rect_is_centered_and_bottom_anchored() -> None:
-    frame = pygame.Surface((84, 128), pygame.SRCALPHA)
-    player_rect = pygame.Rect(100, 200, 32, 32)
+    frame = pygame.Surface((21, 32), pygame.SRCALPHA)
+    player_rect = pygame.Rect(100, 200, 8, 10)
     sprite_rect = character_sprite_rect(frame, player_rect)
     assert sprite_rect.centerx == player_rect.centerx
     assert sprite_rect.bottom == player_rect.bottom
+
+
+def test_character_scaling_preserves_nearest_neighbor_colors() -> None:
+    source = pygame.Surface((336, 384), pygame.SRCALPHA)
+    source.fill((0, 0, 0, 0))
+    source.fill((255, 0, 0, 255), pygame.Rect(0, 0, 4, 4))
+    frames = split_character_sheet(source)
+    assert frames.rows[0][0].get_size() == (21, 32)
+    assert frames.rows[0][0].get_at((0, 0)) == (255, 0, 0, 255)

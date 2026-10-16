@@ -43,7 +43,7 @@ class CharacterFrames:
 
 
 def split_character_sheet(sheet: pygame.Surface) -> CharacterFrames:
-    """Split a 4x3 walking sheet into reusable native-size frames."""
+    """Split and pixel-scale a 4x3 walking sheet into reusable frames."""
 
     expected_size = (
         config.CHARACTER_SHEET_COLUMNS * config.CHARACTER_FRAME_WIDTH,
@@ -51,21 +51,24 @@ def split_character_sheet(sheet: pygame.Surface) -> CharacterFrames:
     )
     if sheet.get_size() != expected_size:
         raise ValueError(
-            f"character sheet must be {expected_size[0]}x{expected_size[1]}, "
+            f"character asset must be {expected_size[0]}x{expected_size[1]}, "
             f"got {sheet.get_width()}x{sheet.get_height()}"
         )
 
     rows: list[tuple[pygame.Surface, ...]] = []
     for row in range(config.CHARACTER_SHEET_ROWS):
         frames = tuple(
-            sheet.subsurface(
-                pygame.Rect(
-                    column * config.CHARACTER_FRAME_WIDTH,
-                    row * config.CHARACTER_FRAME_HEIGHT,
-                    config.CHARACTER_FRAME_WIDTH,
-                    config.CHARACTER_FRAME_HEIGHT,
-                )
-            ).copy()
+            pygame.transform.scale(
+                sheet.subsurface(
+                    pygame.Rect(
+                        column * config.CHARACTER_FRAME_WIDTH,
+                        row * config.CHARACTER_FRAME_HEIGHT,
+                        config.CHARACTER_FRAME_WIDTH,
+                        config.CHARACTER_FRAME_HEIGHT,
+                    )
+                ).copy(),
+                (config.ACTOR_SCALED_FRAME_WIDTH, config.ACTOR_SCALED_FRAME_HEIGHT),
+            )
             for column in range(config.CHARACTER_SHEET_COLUMNS)
         )
         rows.append(frames)

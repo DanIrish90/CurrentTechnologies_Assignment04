@@ -1,21 +1,50 @@
-from __future__ import annotations
+from dataclasses import replace
 
-import pygame
+from game.bureaucracy import collect_initial_document, handover
+from game.input_state import InputState
+from game.state import create_game_state, update_game_state
 
-from game.input_state import InputState, input_from_events
 
-
-def test_interaction_requires_explicit_key_event() -> None:
-    idle = InputState()
-    assert not idle.interact_pressed
-    pressed = input_from_events(
-        [pygame.event.Event(pygame.KEYDOWN, key=pygame.K_e)], idle
+def test_matching_dropoff_zone_accepts_document() -> None:
+    state = create_game_state()
+    assert state.world.document_source is not None
+    collected = update_game_state(
+        replace(state, player=state.player.at(state.world.document_source.bounds.center)),
+        InputState(interact_pressed=True),
+        0,
     )
-    assert pressed.interact_pressed
-
-
-def test_interaction_press_is_a_single_frame_action() -> None:
-    state = input_from_events(
-        [pygame.event.Event(pygame.KEYDOWN, key=pygame.K_e)], InputState()
+    assert collected.workflow is not None and collected.workflow.carried_document is not None
+    zone = collected.world.dropoff_zones[1]
+    delivered = update_game_state(
+        replace(collected, player=collected.player.at(zone.center)),
+        InputState(interact_pressed=True),
+        0,
     )
-    assert not state.clear_interaction().interact_pressed
+    assert delivered.workflow is not None
+    assert delivered.workflow.definition.servants[0].served
+
+
+def test_each_authored_pickup_zone_can_start_document_interaction() -> None:
+    state = create_game_state()
+    assert len(state.world.document_sources) == 2
+    second_source = state.world.document_sources[1]
+    collected = update_game_state(
+        replace(state, player=state.player.at(second_source.bounds.center)),
+        InputState(interact_pressed=True),
+        0,
+    )
+    assert collected.workflow is not None
+    assert collected.workflow.carried_document is not None
+
+
+def test_mismatched_dropoff_zone_rejects_document_without_mutation() -> None:
+    state = create_game_state()
+    carrying, _ = collect_initial_document(state.workflow)
+    carrying_state = replace(state, workflow=carrying)
+    zone = carrying_state.world.dropoff_zones[2]
+    rejected = update_game_state(
+        replace(carrying_state, player=carrying_state.player.at(zone.center)),
+        InputState(interact_pressed=True),
+        0,
+    )
+    assert rejected.workflow == carrying_state.workflow

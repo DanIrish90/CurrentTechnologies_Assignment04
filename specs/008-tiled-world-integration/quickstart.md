@@ -15,7 +15,7 @@ Run focused tests:
 pytest tests/unit/test_geometry.py tests/unit/test_collision.py tests/unit/test_map_loader.py tests/unit/test_world.py
 ```
 
-Expected result: polygon, rectangle, map parsing, spawn, zone, and collision tests pass.
+Expected result: polygon, rectangle, map parsing, spawn, zone, transform, and collision tests pass.
 
 Run the full regression suite:
 
@@ -24,6 +24,8 @@ pytest
 ```
 
 Expected result: movement, camera, bureaucracy, stamina, fishing, wave, UI, and smoke tests remain green.
+
+The current authored `World.tmj` contains 37 positive-size collision rectangles and four polygon collision objects; tests must validate the loaded authored data rather than an obsolete 29-rectangle baseline.
 
 ## Map-data checks
 
@@ -37,6 +39,7 @@ The loader validation must confirm:
 6. Positive-size collision rectangles load and empty non-polygon objects are ignored.
 7. Pickup, fishing, and drop-off zones remain non-solid and inside the map.
 8. `NPCDrawOrder` and `PlayerDrawOrder` remain empty, non-visible ordering anchors.
+9. Transformed tile GIDs retain their Tiled flags when converted to render data; all four high flag bits are cleared only for base-tile lookup, and all eight H/V/D combinations follow the official order: diagonal axis swap first, horizontal flip second, vertical flip third.
 
 ## Manual playtest
 
@@ -55,6 +58,7 @@ Verify:
 7. A mismatched drop-off zone rejects the document without corrupting workflow progress.
 8. Fishing is available inside `FishingZone` and unavailable outside it.
 9. NPCs and the player are Y-sorted by foot position using the draw-order anchors.
+10. Tiles that are rotated, mirrored, or diagonally transformed in Tiled have the same orientation in the running game, with no unintended 180° rotation.
 
 ## Failure checks
 
@@ -64,3 +68,5 @@ Unit tests should cover:
 - Duplicate or missing `servant_id`: clear mapping error.
 - Polygon or zone outside world bounds: clear geometry error.
 - Empty collision object: ignored, while actual polygons remain active.
+- Transformed tile GID: render the authored orientation rather than the untransformed base tile.
+- Transform regression: run the asymmetric eight-combination test using the official Tiled operation order and compare representative transformed tiles from `World.tmj`.

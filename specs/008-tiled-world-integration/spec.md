@@ -15,6 +15,9 @@
 - Q: Soll die Spielerkollision mit Polygonen exakt anhand der Polygonkontur erfolgen, oder genügt zunächst eine konservative Bounding-Box-Kollision? → A: Exakte Kollision zwischen der 32×32-Spielerbox und der Polygonkontur.
 - Q: Sollen `NPCDrawOrder` und `PlayerDrawOrder` eine dynamische Y-Sortierung der Figuren unterstützen, oder ausschließlich eine feste Reihenfolge zwischen NPCs und Spieler vorgeben? → A: Dynamische Y-Sortierung der Actors nach Fußposition innerhalb der authored Layer-Anker.
 - Q: Sollen Civil Servants selbst als physische Hindernisse gelten, oder soll der Spieler durch sie hindurchlaufen und nur mit den Drop-off-Zonen interagieren? → A: Civil Servants sind nicht-solid; nur Drop-off-Zonen steuern die Dokumentabgabe.
+- Q: Wie sollen Tiles behandelt werden, die in Tiled gedreht oder anderweitig transformiert wurden? → A: Jede authored Tiled-Tile-Transformation, insbesondere Rotation und Spiegelung, muss beim Rendern übernommen werden, sodass die Darstellung im Spiel der Ausrichtung in Tiled entspricht.
+- Q: Wie muss die Transformationslogik gegen die aktuell falschen 180°-Ausrichtungen abgesichert werden? → A: Jede Kombination der in Tiled gespeicherten Transformationsflags muss die exakte authored Orientierung reproduzieren; eine diagonale Transformation darf nicht pauschal als alleinige 90°-Rotation behandelt werden, und kein Tile darf als Seiteneffekt 180° verdreht werden.
+- Q: Welches Mapping soll für die Tiled-Transformationsflags verbindlich gelten? → A: Das offizielle Tiled-Mapping für orthogonale Maps: zuerst den diagonalen Flip ausführen, der die untere linke und obere rechte Ecke vertauscht beziehungsweise die X/Y-Achsen spiegelt, danach den horizontalen und den vertikalen Flip in dieser Reihenfolge anwenden; anschließend alle vier hohen GID-Flagbits vor der Tile-ID-Auflösung entfernen.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -32,6 +35,7 @@ As a player, I want to move through the authored Tiled world so that the visible
 2. **Given** the player is in walkable terrain, **When** the player moves against a rectangular collision, **Then** the player is blocked by that collision and can continue moving along an unblocked axis.
 3. **Given** the player approaches one of the authored polygon regions, **When** the player attempts to cross its boundary, **Then** the player is blocked by the polygon and cannot tunnel through it during a single movement update.
 4. **Given** the player is outside the map boundary, **When** movement is resolved, **Then** the player remains within the authored world bounds.
+5. **Given** a visible map layer or tile object contains a Tiled rotation or other tile transformation, **When** the world is rendered, **Then** the tile appears with the same authored orientation as in Tiled.
 
 ### User Story 2 - Process Documents at Authored Locations (Priority: P1)
 
@@ -88,6 +92,8 @@ As a player, I want the authored fishing zone to remain usable so that the world
 - Drop-off zones must remain reachable with the existing player collision bounds, including the narrowest authored zone.
 - Missing, duplicated, or invalid `PlayerSpawn` data MUST prevent a new game from starting with a clear error.
 - Empty draw-order placeholder layers MUST not be rendered as visible map content and MUST not alter collision or interaction behavior.
+- Every authored tile rotation or other Tiled tile transformation MUST remain visible in the rendered world; transform flags MUST NOT be discarded during map loading or rendering.
+- Transform combinations MUST follow the official Tiled orthogonal-map mapping: apply the diagonal flip first, then the horizontal flip, then the vertical flip. The diagonal flip swaps the tile's bottom-left and top-right corners (an X/Y-axis swap); it MUST NOT be implemented as an unconditional standalone 90° rotation.
 - The map must not create a second, conflicting source of hard-coded obstacles, spawns, pickup zones, fishing zones, or servant positions.
 
 ## Requirements *(mandatory)*
@@ -114,6 +120,7 @@ As a player, I want the authored fishing zone to remain usable so that the world
 - **FR-018**: The game MUST keep actor rendering separate from authoritative movement, collision, document, stamina, and wave state.
 - **FR-019**: The game MUST reject malformed required map data with clear validation errors rather than silently falling back to the current hard-coded world definitions.
 - **FR-020**: Existing document workflow, movement, stamina, fishing, camera, wave, and restart behavior MUST remain functional after world loading is introduced.
+- **FR-021**: The game MUST apply every authored Tiled tile transformation when rendering visible tile layers and tile objects according to the official Tiled global-tile-ID rules for orthogonal maps: read the horizontal, vertical, diagonal, and reserved high-bit flags; clear all four high flag bits before resolving the base tile ID; apply the diagonal flip first, followed by the horizontal flip and then the vertical flip; and preserve the resulting authored orientation without unintended 180° rotations. The diagonal flip MUST swap the tile's bottom-left and top-right corners and MUST NOT be treated as an unconditional standalone 90° rotation.
 
 ### Key Entities
 
@@ -138,13 +145,14 @@ As a player, I want the authored fishing zone to remain usable so that the world
 - **SC-005**: The player can enter and use the authored fishing zone, and cannot activate fishing outside it, in automated interaction tests.
 - **SC-006**: The complete existing test suite remains green and the game remains launchable at the target 60 FPS after world integration.
 - **SC-007**: A manual traversal of representative terrain, rectangles, polygons, pickup zones, drop-off zones, spawn locations, and the fishing zone reveals no inaccessible required interaction caused by map collision.
+- **SC-008**: Automated rendering checks cover all eight orthogonal horizontal/vertical/diagonal flag combinations with asymmetrical tiles plus representative authored transformed map tiles, confirming zero unintended 180° rotations and no silently dropped transform.
 
 ## Assumptions
 
 - `World.tmj` and its referenced `WorldTileSet.tsx` remain available at their current repository paths at runtime.
 - The map's coordinate system is top-left-origin with pixel coordinates, matching the existing world and camera model.
 - Existing player movement uses a 32×32 logical collision box unless a later feature explicitly changes that contract.
-- The initial version supports the authored orthogonal Tiled map and polygon/rectangle collision shapes; rotated or ellipse collision objects are out of scope unless added to the map.
+- The initial version supports the authored orthogonal Tiled map and polygon/rectangle collision shapes; tile rotations and mirror transformations are part of the authored visual map contract, while rotated or ellipse collision objects remain out of scope unless added to the map.
 - `servant_id` values are unique positive integers and are shared between servant spawn points and their corresponding drop-off zones.
 - `NPCDrawOrder` and `PlayerDrawOrder` are intentionally empty marker layers; actor sorting remains a presentation concern and does not change gameplay rules.
 - The current gameplay systems continue to own wave progression, document requirements, stamina rules, fishing rules, and interaction timing.

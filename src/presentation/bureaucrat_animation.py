@@ -30,7 +30,7 @@ class BureaucratFrames:
 
 
 def split_bureaucrat_sheet(sheet: pygame.Surface) -> BureaucratFrames:
-    """Split the expected 2x2 sheet into four independent frame surfaces."""
+    """Split and pixel-scale the expected 2x2 sheet into frame surfaces."""
 
     expected_size = (
         config.BUREAUCRAT_SHEET_COLUMNS * config.BUREAUCRAT_FRAME_WIDTH,
@@ -38,21 +38,24 @@ def split_bureaucrat_sheet(sheet: pygame.Surface) -> BureaucratFrames:
     )
     if sheet.get_size() != expected_size:
         raise ValueError(
-            f"Bureaucrat sheet must be {expected_size[0]}x{expected_size[1]}, "
+            f"bureaucrat asset must be {expected_size[0]}x{expected_size[1]}, "
             f"got {sheet.get_width()}x{sheet.get_height()}"
         )
 
     rows: list[tuple[pygame.Surface, ...]] = []
     for row in range(config.BUREAUCRAT_SHEET_ROWS):
         frames = tuple(
-            sheet.subsurface(
-                pygame.Rect(
-                    column * config.BUREAUCRAT_FRAME_WIDTH,
-                    row * config.BUREAUCRAT_FRAME_HEIGHT,
-                    config.BUREAUCRAT_FRAME_WIDTH,
-                    config.BUREAUCRAT_FRAME_HEIGHT,
-                )
-            ).copy()
+            pygame.transform.scale(
+                sheet.subsurface(
+                    pygame.Rect(
+                        column * config.BUREAUCRAT_FRAME_WIDTH,
+                        row * config.BUREAUCRAT_FRAME_HEIGHT,
+                        config.BUREAUCRAT_FRAME_WIDTH,
+                        config.BUREAUCRAT_FRAME_HEIGHT,
+                    )
+                ).copy(),
+                (config.ACTOR_SCALED_FRAME_WIDTH, config.ACTOR_SCALED_FRAME_HEIGHT),
+            )
             for column in range(config.BUREAUCRAT_SHEET_COLUMNS)
         )
         rows.append(frames)

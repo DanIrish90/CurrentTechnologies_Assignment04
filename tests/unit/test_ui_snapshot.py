@@ -7,6 +7,17 @@ from game.fishing import FishingPhase
 from game.bureaucracy import collect_initial_document, handover
 from dataclasses import replace
 from game.state import update_game_state
+from game.stamina import StaminaState
+
+
+def _source_position(state):
+    assert state.world.document_source is not None
+    return state.world.document_source.bounds.center
+
+
+def _pond_position(state):
+    assert state.world.fishing_pond is not None
+    return state.world.fishing_pond.bounds.center
 
 
 def _rest_state(state):
@@ -27,7 +38,7 @@ def test_ui_snapshot_reports_stamina_and_carrying_status() -> None:
     state = create_game_state()
     assert snapshot_stamina_text(ui_snapshot(state)) == "STAMINA: 100/100"
     collected = update_game_state(
-        replace(state, player=state.player.at(Vector2(220, 130))),
+        replace(state, player=state.player.at(_source_position(state))),
         InputState(interact_pressed=True),
         0,
     )
@@ -41,7 +52,7 @@ def snapshot_stamina_text(snapshot) -> str:
 
 def test_ui_snapshot_does_not_report_passive_recovery_in_fishing_pond() -> None:
     state = _rest_state(create_game_state())
-    in_zone = replace(state, player=state.player.at(Vector2(100, 840)))
+    in_zone = replace(state, player=state.player.at(_pond_position(state)))
     snapshot = ui_snapshot(in_zone)
     assert snapshot.fishing_pond_active
     assert "available" in snapshot.fishing_status.lower()
@@ -58,7 +69,7 @@ def test_ui_snapshot_exposes_restart_button_after_game_over() -> None:
 
 def test_ui_snapshot_reports_fishing_phase_feedback() -> None:
     state = _rest_state(create_game_state())
-    pond = replace(state, player=state.player.at(Vector2(100, 840)))
+    pond = replace(state, player=state.player.at(_pond_position(state)))
     casting = update_game_state(pond, InputState(interact_pressed=True), 0)
     snapshot = ui_snapshot(casting)
     assert "WAITING" in snapshot.fishing_status.upper()
@@ -66,7 +77,7 @@ def test_ui_snapshot_reports_fishing_phase_feedback() -> None:
 
 def test_ui_snapshot_exposes_catch_game_meters() -> None:
     state = _rest_state(create_game_state())
-    pond = replace(state, player=state.player.at(Vector2(100, 840)))
+    pond = replace(state, player=state.player.at(_pond_position(state)))
     waiting = update_game_state(pond, InputState(interact_pressed=True), 0)
     bite = update_game_state(waiting, InputState(), 2.0)
     catching = update_game_state(bite, InputState(interact_pressed=True), 0)
@@ -78,7 +89,7 @@ def test_ui_snapshot_exposes_catch_game_meters() -> None:
 
 def test_ui_snapshot_keeps_catch_game_visible_during_grace_period() -> None:
     state = _rest_state(create_game_state())
-    pond = replace(state, player=state.player.at(Vector2(100, 840)))
+    pond = replace(state, player=state.player.at(_pond_position(state)))
     active = update_game_state(
         replace(pond, fishing=pond.fishing.__class__(phase=FishingPhase.CATCHING, fishing_progress=50)),
         InputState(),
@@ -104,10 +115,56 @@ def test_ui_snapshot_shows_rest_with_fishing_active() -> None:
     state = create_game_state()
     carrying, _ = collect_initial_document(state.workflow)
     completed, _ = handover(carrying, "servant-1")
-    rest = replace(state, workflow=completed, player=state.player.at(Vector2(100, 840)))
+    rest = replace(state, workflow=completed, player=state.player.at(_pond_position(state)))
     casting = update_game_state(rest, InputState(interact_pressed=True), 0)
     snapshot = ui_snapshot(casting)
     assert snapshot.rest_countdown_visible
     assert snapshot.fishing_visible
     assert snapshot.fishing_phase == "waiting_for_bite"
     assert "waiting" in snapshot.fishing_status.lower()
+
+
+def test_ui_snapshot_exposes_stamina_ratio_and_color_thresholds() -> None:
+    state = create_game_state()
+    assert ui_snapshot(state).stamina_ratio == 1.0
+    assert ui_snapshot(state).stamina_color_state == "green"
+    assert ui_snapshot(replace(state, stamina=StaminaState(current=50))).stamina_color_state == "green"
+    assert ui_snapshot(replace(state, stamina=StaminaState(current=49))).stamina_color_state == "yellow"
+    assert ui_snapshot(replace(state, stamina=StaminaState(current=10))).stamina_color_state == "yellow"
+    assert ui_snapshot(replace(state, stamina=StaminaState(current=9))).stamina_color_state == "red"
+
+
+def test_ui_snapshot_only_exposes_actionable_interactions() -> None:
+    state = create_game_state()
+    assert not ui_snapshot(state).interaction_available
+    source = replace(state, player=state.player.at(_source_position(state)))
+    assert ui_snapshot(source).interaction_available
+    collected = update_game_state(source, InputState(interact_pressed=True), 0)
+    assert not ui_snapshot(collected).interaction_available
+    servant = replace(collected, player=collected.player.at(collected.world.dropoff_zones[1].center))
+    assert ui_snapshot(servant).interaction_available
+
+
+def test_ui_snapshot_matches_fishing_action_phases_and_blocked_states() -> None:
+    state = create_game_state()
+    pond_position = _pond_position(state)
+    active_pond = replace(state, player=state.player.at(pond_position))
+    assert not ui_snapshot(active_pond).interaction_available
+
+    rest = _rest_state(state)
+    pond = replace(rest, player=rest.player.at(pond_position))
+    assert ui_snapshot(pond).interaction_available
+
+    waiting = update_game_state(pond, InputState(interact_pressed=True), 0)
+    assert not ui_snapshot(waiting).interaction_available
+    bite = update_game_state(waiting, InputState(), 2.0)
+    assert ui_snapshot(bite).interaction_available
+    catching = update_game_state(bite, InputState(interact_pressed=True), 0)
+    assert ui_snapshot(catching).interaction_available
+
+    exhausted = replace(
+        pond,
+        game_over=True,
+        stamina=StaminaState(current=0, game_over=True),
+    )
+    assert not ui_snapshot(exhausted).interaction_available

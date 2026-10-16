@@ -12,14 +12,13 @@ class StaminaState:
     current: float = config.STAMINA_MAXIMUM
     maximum: float = config.STAMINA_MAXIMUM
     drain_rate: float = config.STAMINA_DRAIN_RATE
-    regen_rate: float = config.STAMINA_REGEN_RATE
     game_over: bool = False
 
     def __post_init__(self) -> None:
         if self.maximum <= 0:
             raise ValueError("stamina maximum must be positive")
-        if self.drain_rate < 0 or self.regen_rate < 0:
-            raise ValueError("stamina rates must not be negative")
+        if self.drain_rate < 0:
+            raise ValueError("stamina drain rate must not be negative")
         if not 0 <= self.current <= self.maximum:
             raise ValueError("stamina current value must be within bounds")
         if self.current == 0 and not self.game_over:
@@ -35,7 +34,6 @@ def advance_stamina(
     elapsed_seconds: float,
     *,
     carrying_document: bool,
-    in_regen_zone: bool,
 ) -> StaminaState:
     """Apply one elapsed simulation interval to stamina."""
 
@@ -45,8 +43,6 @@ def advance_stamina(
         return state
     if carrying_document:
         delta = -state.drain_rate * elapsed_seconds
-    elif in_regen_zone:
-        delta = state.regen_rate * elapsed_seconds
     else:
         delta = 0.0
     current = max(0.0, min(state.maximum, state.current + delta))

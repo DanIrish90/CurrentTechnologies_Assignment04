@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+import pygame
 
 from game.geometry import Vector2
 from game.input_state import InputState
@@ -19,8 +20,20 @@ from game.fishing import FishingState, create_fishing_state
 
 
 @pytest.fixture
+def pygame_display():
+    """Provide a shared display/font lifecycle for headless Pygame tests."""
+
+    pygame.display.init()
+    pygame.font.init()
+    pygame.display.set_mode((1, 1))
+    yield
+    pygame.font.quit()
+    pygame.display.quit()
+
+
+@pytest.fixture
 def player() -> Player:
-    return Player(position=Vector2(100.0, 100.0), size=Vector2(32.0, 32.0), speed=240.0)
+    return Player(position=Vector2(100.0, 100.0), size=Vector2(8.0, 10.0), speed=240.0)
 
 
 @pytest.fixture

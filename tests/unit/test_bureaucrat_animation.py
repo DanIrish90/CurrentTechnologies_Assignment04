@@ -26,11 +26,11 @@ def servant(servant_id: str, served: bool = False) -> CivilServant:
     return CivilServant(servant_id, servant_id, Vector2(100, 100), 1, served)
 
 
-def test_sheet_contains_four_native_size_frames() -> None:
+def test_bureaucrat_frames_are_scaled_to_world_size() -> None:
     frames = load_bureaucrat_frames()
     assert len(frames.rows) == 2
     assert all(len(row) == 2 for row in frames.rows)
-    assert all(frame.get_size() == (84, 128) for row in frames.rows for frame in row)
+    assert all(frame.get_size() == (21, 32) for row in frames.rows for frame in row)
 
 
 def test_split_rejects_unexpected_sheet_dimensions() -> None:
@@ -97,8 +97,17 @@ def test_large_elapsed_interval_wraps_safely() -> None:
 
 
 def test_sprite_placement_preserves_target_center_bottom() -> None:
-    frame = pygame.Surface((84, 128), pygame.SRCALPHA)
-    target = pygame.Rect(826, 140, 48, 60)
+    frame = pygame.Surface((21, 32), pygame.SRCALPHA)
+    target = pygame.Rect(826, 140, 12, 15)
     placed = bureaucrat_sprite_rect(frame, target)
     assert placed.centerx == target.centerx
     assert placed.bottom == target.bottom
+
+
+def test_bureaucrat_scaling_preserves_nearest_neighbor_colors() -> None:
+    source = pygame.Surface((168, 256), pygame.SRCALPHA)
+    source.fill((0, 0, 0, 0))
+    source.fill((0, 255, 0, 255), pygame.Rect(0, 0, 4, 4))
+    frames = split_bureaucrat_sheet(source)
+    assert frames.rows[0][0].get_size() == (21, 32)
+    assert frames.rows[0][0].get_at((0, 0)) == (0, 255, 0, 255)

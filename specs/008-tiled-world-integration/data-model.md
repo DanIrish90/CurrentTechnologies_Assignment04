@@ -20,6 +20,20 @@ Represents the loaded finite map and authored gameplay data.
 | fishing_zone | rectangle + properties | Non-solid fishing/stamina zone |
 | draw_order_anchors | ordered anchors | `NPCDrawOrder` and `PlayerDrawOrder` |
 
+## Rendered Tile Reference
+
+Represents one visible tile reference as authored by Tiled.
+
+| Field | Type | Rules |
+|---|---|---|
+| raw_gid | integer | Includes the base tileset ID and any Tiled transform flags |
+| tile_id | integer | Transform flags removed before tileset source lookup |
+| transform | flags | Preserves Tiled's horizontal, vertical, diagonal, and reserved high-bit flags until presentation applies the official operation order |
+| layer_position | point | Tile-layer grid position or tile-object world position |
+| source_rect | rectangle | Resolved from the unflagged tileset ID |
+
+For the orthogonal map, the renderer must clear all four high GID flag bits before resolving `tile_id`, then apply the diagonal transformation first as the official bottom-left/top-right corner swap (X/Y-axis swap), followed by horizontal and vertical flips. Transform flags must not affect collision, object positions, layer order, or world coordinates. Each of the eight H/V/D combinations must be validated with an asymmetric tile so no combination produces an unintended 180° rotation.
+
 ## Collision Shape
 
 ### Rectangle Collision
@@ -102,3 +116,4 @@ WorldMap
 6. Empty non-polygon collision objects are ignored; positive-size rectangles are loaded.
 7. Active geometry and interaction zones must lie within 1920×1088.
 8. Player spawn and required drop-off zones must not be blocked by solid geometry.
+9. Every visible tile-layer and tile-object GID must retain its authored Tiled transform through map loading and rendering.

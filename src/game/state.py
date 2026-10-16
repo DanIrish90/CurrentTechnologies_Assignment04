@@ -22,8 +22,9 @@ from .fishing import FishingOutcome, FishingPhase, FishingState, advance_fishing
 from .geometry import Rect, Vector2
 from .input_state import InputState
 from .movement import move_player
+from .map_loader import load_map
 from .stamina import StaminaState, advance_stamina, create_initial_stamina
-from .world import Player, World, civil_servant_positions, create_initial_player, create_initial_world
+from .world import DocumentSource, Player, World, civil_servant_positions, create_initial_player, create_initial_world
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +51,9 @@ class UiSnapshot:
     rest_wave_number: int = 0
     rest_seconds_remaining: float = 0.0
     rest_progress: float = 0.0
+    interaction_available: bool = False
+    stamina_ratio: float = 1.0
+    stamina_color_state: str = "green"
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,11 +70,13 @@ class GameState:
 
 
 def create_game_state(viewport_size: Vector2 | None = None) -> GameState:
-    world = create_initial_world()
+    map_data = load_map(config.WORLD_MAP_PATH)
+    world = map_data.world
+    positions = tuple(map_data.servant_spawns[index] for index in sorted(map_data.servant_spawns))
     player = create_initial_player(world)
     viewport = viewport_size or Vector2(VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
     camera = update_camera(player, world, viewport)
-    wave = create_wave(1, civil_servant_positions(1))
+    wave = create_wave(1, positions[:1])
     return GameState(
         world=world,
         player=player,
@@ -85,22 +91,29 @@ def _within_interaction_range(player: Player, target: Vector2) -> bool:
     return (player.center - target).length() <= config.INTERACTION_RANGE
 
 
+def _document_sources(world: World) -> tuple[DocumentSource, ...]:
+    if world.document_sources:
+        return world.document_sources
+    if world.document_source is not None:
+        return (world.document_source,)
+    return ()
+
+
 def _dispatch_interaction(state: GameState) -> WaveProgress | None:
     workflow = state.workflow
     if workflow is None or state.world.document_source is None:
         return workflow
-    source = state.world.document_source
-    if _within_interaction_range(state.player, source.bounds.center):
-        collected, _ = collect_initial_document(workflow)
-        return collected
-    in_range_servants = sorted(
-        (
-            servant
-            for servant in workflow.definition.servants
-            if _within_interaction_range(state.player, servant.position)
-        ),
-        key=lambda servant: servant.step_order,
-    )
+    for source in _document_sources(state.world):
+        if _within_interaction_range(state.player, source.bounds.center):
+            collected, _ = collect_initial_document(workflow)
+            return collected
+    in_range_servants = []
+    for servant in workflow.definition.servants:
+        servant_number = int(servant.id.split("-")[-1])
+        zone = (state.world.dropoff_zones or {}).get(servant_number)
+        if zone is not None and state.player.bounds.overlaps(zone):
+            in_range_servants.append(servant)
+    in_range_servants.sort(key=lambda servant: servant.step_order)
     if not in_range_servants:
         return workflow
     handed_over, _ = handover(workflow, in_range_servants[0].id)
@@ -163,7 +176,13 @@ def update_game_state(
         workflow = _dispatch_interaction(replace(state, player=player, camera=camera))
     previous_workflow = workflow
     if workflow is not None:
-        workflow = advance_progress(workflow, elapsed_seconds)
+        map_positions = state.world.servant_spawns
+        next_wave_factory = (
+            (lambda number: create_wave(number, tuple(map_positions[index] for index in sorted(map_positions)[:number])))
+            if map_positions is not None and len(map_positions) >= workflow.definition.wave_number + 1
+            else create_wave
+        )
+        workflow = advance_progress(workflow, elapsed_seconds, next_wave_factory=next_wave_factory)
     wave_started = (
         previous_workflow is not None
         and workflow is not None
@@ -196,12 +215,10 @@ def update_game_state(
             stamina,
             current=min(stamina.maximum, stamina.current + fishing_outcome.stamina_reward),
         )
-    in_regen_zone = False
     stamina = advance_stamina(
         stamina,
         elapsed_seconds,
         carrying_document=carrying_document,
-        in_regen_zone=in_regen_zone,
     )
     return replace(
         state,
@@ -226,8 +243,52 @@ def _point_in_rect(point: Vector2, rect: Rect) -> bool:
     return rect.x <= point.x <= rect.right and rect.y <= point.y <= rect.bottom
 
 
+def _interaction_available(state: GameState) -> bool:
+    """Return whether the existing interaction key has a meaningful action."""
+
+    if state.game_over or state.workflow is None:
+        return False
+    workflow = state.workflow
+    for source in _document_sources(state.world):
+        if _within_interaction_range(state.player, source.bounds.center):
+            _, result = collect_initial_document(workflow)
+            if result.accepted:
+                return True
+    for servant in workflow.definition.servants:
+        servant_number = int(servant.id.split("-")[-1])
+        zone = (state.world.dropoff_zones or {}).get(servant_number)
+        if zone is not None and state.player.bounds.overlaps(zone):
+            _, result = handover(workflow, servant.id)
+            if result.accepted:
+                return True
+    pond = state.world.fishing_pond
+    carrying_document = workflow.carried_document is not None
+    if (
+        pond is not None
+        and state.player.bounds.overlaps(pond.bounds)
+        and not carrying_document
+        and workflow.phase is not WorkflowPhase.ACTIVE
+        and state.fishing.phase in (FishingPhase.IDLE, FishingPhase.BITE_WINDOW, FishingPhase.CATCHING)
+    ):
+        return True
+    return False
+
+
+def _stamina_display(state: StaminaState) -> tuple[float, str]:
+    ratio = max(0.0, min(1.0, state.current / state.maximum))
+    if ratio >= config.UI_STAMINA_GREEN_THRESHOLD:
+        color_state = "green"
+    elif ratio >= config.UI_STAMINA_YELLOW_THRESHOLD:
+        color_state = "yellow"
+    else:
+        color_state = "red"
+    return ratio, color_state
+
+
 def ui_snapshot(state: GameState) -> UiSnapshot:
     workflow = state.workflow
+    stamina_ratio, stamina_color_state = _stamina_display(state.stamina)
+    interaction_available = _interaction_available(state)
     rest_visible = workflow is not None and workflow.phase is not WorkflowPhase.ACTIVE
     rest_seconds = (
         max(0.0, min(config.DOCUMENT_TRANSITION_SECONDS, workflow.transition_remaining))
@@ -254,16 +315,16 @@ def ui_snapshot(state: GameState) -> UiSnapshot:
                 and rest_visible
             ),
             rest_countdown_visible=False,
+            interaction_available=interaction_available,
+            stamina_ratio=stamina_ratio,
+            stamina_color_state=stamina_color_state,
         )
     carried = workflow.carried_document
     carried_label = "Carrying: nothing" if carried is None else f"Carrying: {carried.document_type.value}"
-    in_regen_zone = False
     if state.game_over:
         stamina_status = "GAME OVER: EXHAUSTED"
     elif carried is not None:
         stamina_status = "CARRYING: -5/S"
-    elif in_regen_zone:
-        stamina_status = "RECOVERING: +10/S"
     else:
         stamina_status = "STABLE"
     return UiSnapshot(
@@ -299,4 +360,7 @@ def ui_snapshot(state: GameState) -> UiSnapshot:
         rest_wave_number=workflow.definition.wave_number,
         rest_seconds_remaining=rest_seconds,
         rest_progress=rest_progress,
+        interaction_available=interaction_available,
+        stamina_ratio=stamina_ratio,
+        stamina_color_state=stamina_color_state,
     )
