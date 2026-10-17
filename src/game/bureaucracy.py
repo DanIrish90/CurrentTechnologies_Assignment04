@@ -277,7 +277,7 @@ def handover(progress: WaveProgress, servant_id: str) -> tuple[WaveProgress, Han
             True,
         ),
         phase=WorkflowPhase.COMPLETION_FEEDBACK if completed else WorkflowPhase.ACTIVE,
-        transition_remaining=config.DOCUMENT_TRANSITION_SECONDS if completed else 0.0,
+        transition_remaining=config.WAVE_REST_DURATION if completed else 0.0,
     )
     return updated, HandoverResult(
         True,

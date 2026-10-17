@@ -8,6 +8,7 @@ from game.bureaucracy import collect_initial_document, handover
 from dataclasses import replace
 from game.state import update_game_state
 from game.stamina import StaminaState
+from game import config
 
 
 def _source_position(state):
@@ -100,7 +101,7 @@ def test_ui_snapshot_keeps_catch_game_visible_during_grace_period() -> None:
     assert snapshot.fishing_phase == "catching"
 
 
-def test_ui_snapshot_exposes_rest_countdown_and_completed_wave() -> None:
+def test_ui_snapshot_exposes_worm_timer_during_rest() -> None:
     state = create_game_state()
     carrying, _ = collect_initial_document(state.workflow)
     completed, _ = handover(carrying, "servant-1")
@@ -109,6 +110,26 @@ def test_ui_snapshot_exposes_rest_countdown_and_completed_wave() -> None:
     assert snapshot.rest_wave_number == 1
     assert snapshot.rest_seconds_remaining == 10
     assert snapshot.rest_progress == 1
+    assert snapshot.rest_elapsed_progress == 0
+    assert snapshot.worm_timer_frame_index == 0
+
+
+def test_ui_snapshot_derives_worm_progress_and_frame_from_elapsed_rest_time() -> None:
+    state = _rest_state(create_game_state())
+    halfway = update_game_state(state, InputState(), config.WAVE_REST_DURATION / 2)
+
+    snapshot = ui_snapshot(halfway)
+
+    assert snapshot.rest_elapsed_progress == 0.5
+    assert snapshot.worm_timer_frame_index == int(config.WORM_TIMER_FPS * config.WAVE_REST_DURATION / 2) % config.WORM_TIMER_FRAME_COUNT
+
+
+def test_ui_snapshot_hides_worm_timer_during_active_wave() -> None:
+    snapshot = ui_snapshot(create_game_state())
+
+    assert not snapshot.rest_countdown_visible
+    assert snapshot.rest_elapsed_progress == 0.0
+    assert snapshot.worm_timer_frame_index == 0
 
 
 def test_ui_snapshot_shows_rest_with_fishing_active() -> None:

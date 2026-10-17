@@ -1,110 +1,185 @@
 ---
 
-description: "Implementation task list for the Wave Rest Countdown feature"
+description: "Implementation tasks for the WormTimer wave-rest countdown"
 ---
 
 # Tasks: Wave Rest Countdown
 
 **Input**: Design documents from `/specs/005-wave-rest-countdown/`
 
-**Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [quickstart.md](./quickstart.md)
+**Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, `quickstart.md`
 
-**Tests**: Test tasks are included because the feature changes deterministic workflow timing, fishing eligibility, UI geometry, and reward handling.
+**Organization**: Tasks are grouped by user story so each story can be implemented and validated independently after the foundational work.
 
-## Phase 1: Setup (Shared Infrastructure)
+## Phase 1: Setup
 
-- [X] T001 Add centralized ten-second rest duration, bottom-center clock geometry, and arc-orientation constants in `src/game/config.py`.
-- [X] T002 [P] Add completed-rest, transitioning-rest, and active-wave fixtures/helpers in `tests/conftest.py`.
-- [X] T003 [P] Verify the updated rest-fishing, active-wave blocking, orientation, and positioning scenarios in `specs/005-wave-rest-countdown/quickstart.md`.
+**Purpose**: Confirm the existing project structure and asset contract before implementation.
 
-## Phase 2: Foundational (Blocking Prerequisites)
+- [X] T001 Verify the feature asset and existing UI rendering entry points in `assets/UserInterface/WormTimer.png`, `src/presentation/ui_assets.py`, and `src/presentation/renderer.py`
+- [X] T002 [P] Record the feature validation commands and expected outcomes in `specs/005-wave-rest-countdown/quickstart.md`
 
-**Purpose**: Preserve deterministic wave progression before changing fishing availability.
+---
 
-- [X] T004 [P] Add workflow tests for ten-second completion feedback, elapsed countdown, exact zero, and one-time next-wave creation in `tests/unit/test_wave_transition.py`.
-- [X] T005 [P] Add boundary tests proving non-negative transition time and initial active Wave 1 behavior in `tests/unit/test_bureaucracy.py`.
-- [X] T006 Confirm `advance_progress` remains the single authoritative transition path and handles large elapsed steps without duplicate waves in `src/game/bureaucracy.py`.
+## Phase 2: Foundational
 
-## Phase 3: User Story 1 - Understand the Wave Rest Countdown (Priority: P1) MVP
+**Purpose**: Establish shared configuration and validated sprite data that all user stories depend on.
 
-**Goal**: Show the completed wave, readable remaining time, and an upward-facing semicircle centered at the bottom of the screen.
+**⚠️ CRITICAL**: Complete this phase before user-story implementation.
 
-**Independent Test**: Complete a wave, inspect the snapshot and render a rest state; verify the clock is visible, bottom-centered, upward-facing, and counts down from ten to zero.
+- [X] T003 Replace `DOCUMENT_TRANSITION_SECONDS` with positive `WAVE_REST_DURATION = 10.0` and add positive `WORM_TIMER_FPS = 8.0` plus `WORM_TIMER_ASSET_PATH`, `WORM_TIMER_FRAME_WIDTH = 64`, `WORM_TIMER_FRAME_HEIGHT = 32`, and `WORM_TIMER_FRAME_COUNT = 7` in `src/game/config.py`
+- [X] T004 [P] Add `split_worm_timer_frames(surface)` and extend `UiAssets` with seven validated 64×32 frames from the 448×32 sheet in `src/presentation/ui_assets.py`
+- [X] T005 [P] Add asset-dimension and seven-frame ordering tests for `WormTimer.png` in `tests/unit/test_ui_assets.py`
+- [X] T006 Update existing workflow duration references and transition assertions to use `config.WAVE_REST_DURATION` in `src/game/bureaucracy.py`, `src/game/state.py`, `tests/unit/test_state.py`, and `tests/unit/test_wave_transition.py`
 
-- [X] T007 [P] [US1] Add `UiSnapshot` tests for rest visibility, completed wave number, clamped seconds, normalized progress, and hidden active-wave state in `tests/unit/test_ui_snapshot.py`.
-- [X] T008 [P] [US1] Add state integration tests proving completion feedback starts the rest countdown without changing document or servant state in `tests/unit/test_state.py`.
-- [X] T009 [P] [US1] Add a headless renderer smoke test for the visible rest clock and its completed-wave label in `tests/smoke/test_launch_contract.py`.
-- [X] T010 [US1] Add derived rest countdown fields to `UiSnapshot`, clamped to `0.0–10.0` seconds and `0.0–1.0` progress, in `src/game/state.py`.
-- [X] T011 [US1] Render the semicircle with its open side downward, completed wave number, and readable seconds in `src/presentation/renderer.py`.
-- [X] T012 [US1] Position the rest clock horizontally centered in the lower viewport and use centralized dimensions/colors from `src/game/config.py` in `src/presentation/renderer.py`.
+**Checkpoint**: Configuration and asset loading are validated; user stories can now be implemented.
 
-## Phase 4: User Story 2 - Fishing During the Rest Phase (Priority: P1)
+---
 
-**Goal**: Make the rest countdown the exclusive fishing window while the countdown continues independently.
+## Phase 3: User Story 1 - Ruhephase und WormTimer verstehen (Priority: P1) 🎯 MVP
 
-**Independent Test**: During rest, cast in the Fishing Pond and verify fishing starts and can reward stamina; during an active wave, the same input remains idle.
+**Goal**: After wave completion, show the animated WormTimer below the stamina bar and make its movement represent the configured rest duration.
 
-- [X] T013 [P] [US2] Add state tests proving an empty-handed player can start fishing during `COMPLETION_FEEDBACK` and `TRANSITIONING` in `tests/unit/test_state.py`.
-- [X] T014 [P] [US2] Add state tests proving fishing input is blocked during an `ACTIVE` wave, including inside the Fishing Pond, in `tests/unit/test_state.py`.
-- [X] T015 [P] [US2] Add integration tests proving rest time decreases during an active fishing attempt and is not reset by fishing input in `tests/unit/test_state.py`.
-- [X] T016 [P] [US2] Add UI snapshot tests for visible fishing feedback during rest and blocked fishing feedback during active waves in `tests/unit/test_ui_snapshot.py`.
-- [X] T017 [US2] Gate fishing eligibility on non-`ACTIVE` rest phases while preserving empty-handed Fishing Pond checks in `src/game/state.py`.
-- [X] T018 [US2] Keep fishing state progression and stamina rewards enabled during rest while preventing document interaction conflicts in `src/game/state.py`.
-- [X] T019 [US2] Render clear fishing availability/unavailability feedback alongside the countdown and existing fishing overlay in `src/presentation/renderer.py`.
+**Independent Test**: Complete a wave, verify the WormTimer is visible under the stamina bar, advance simulation time, verify monotonic left-to-right movement, and confirm it reaches the right endpoint at rest expiry for both default and alternate positive durations.
 
-## Phase 5: User Story 3 - Automatic Next-Wave Transition (Priority: P1)
+### Tests for User Story 1
 
-**Goal**: Start exactly one next wave at zero, hide the clock, and end fishing without reward at the deadline.
+- [X] T007 [P] [US1] Add snapshot tests for rest visibility, clamped remaining time, normalized elapsed progress, and WormTimer frame index in `tests/unit/test_ui_snapshot.py`
+- [X] T008 [P] [US1] Add deterministic tests for configurable rest duration, zero clamping, and one-time next-wave transition in `tests/unit/test_wave_transition.py`
+- [X] T009 [P] [US1] Add layout tests proving the WormTimer track is below `stamina_bar_rect`, moves from its left edge to right edge, and remains fully visible at endpoints in `tests/unit/test_ui_layout.py`
 
-**Independent Test**: Advance a rest state to and beyond zero, verify Wave 2 is active exactly once, the clock is hidden, fishing is idle, and active-wave casting remains blocked.
+### Implementation for User Story 1
 
-- [X] T020 [P] [US3] Add exact-boundary and overlong-step tests for one-time next-wave creation and hidden countdown data in `tests/unit/test_state.py`.
-- [X] T021 [P] [US3] Add deadline cancellation tests for `WAITING_FOR_BITE`, `BITE_WINDOW`, and `CATCHING` with no fish or stamina reward in `tests/unit/test_state.py`.
-- [X] T022 [P] [US3] Add workflow preservation tests for next-wave servant count, document sequence, and active-wave fishing blocking in `tests/unit/test_state.py` and `tests/unit/test_bureaucracy.py`.
-- [X] T023 [P] [US3] Add restart regression coverage proving Restart returns to active Wave 1 with no countdown in `tests/unit/test_state.py` and `tests/smoke/test_launch_contract.py`.
-- [X] T024 [US3] Detect creation of a new active wave after `advance_progress`, reset fishing before same-update rewards, and preserve the deadline priority in `src/game/state.py`.
-- [X] T025 [US3] Hide the rest snapshot after transition and preserve the active-wave fishing block while retaining stamina/game-over rules in `src/game/state.py`.
+- [X] T010 [US1] Replace hard-coded duration references with `config.WAVE_REST_DURATION` in `src/game/bureaucracy.py` and preserve elapsed-time, clamping, and one-time transition behavior
+- [X] T011 [US1] Extend `UiSnapshot` and `ui_snapshot` with `rest_elapsed_progress` and deterministic `worm_timer_frame_index` derived from `WAVE_REST_DURATION` and `WORM_TIMER_FPS` in `src/game/state.py`
+- [X] T012 [US1] Add a pure WormTimer placement helper anchored to the rendered stamina-bar rectangle below the bar with a clamped left-to-right progress track in `src/presentation/ui_assets.py`
+- [X] T013 [US1] Replace the semicircular `_draw_rest_countdown` implementation with WormTimer frame rendering below the stamina bar, using the snapshot frame index and elapsed progress in `src/presentation/renderer.py`
+- [X] T014 [US1] Update the rest rendering smoke test to assert WormTimer rendering succeeds and the obsolete semicircular countdown path is absent in `tests/smoke/test_launch_contract.py`
 
-## Phase 6: Polish & Cross-Cutting Validation
+**Checkpoint**: User Story 1 is independently functional: configurable rest timing, animated frames, time-proportional worm movement, and hidden-on-transition behavior work together.
 
-- [X] T026 [P] Update `README.md` with exclusive rest-phase fishing and the bottom-center upward-facing clock.
-- [X] T027 [P] Synchronize `specs/005-wave-rest-countdown/data-model.md`, `specs/005-wave-rest-countdown/quickstart.md`, and `specs/005-wave-rest-countdown/research.md` with the exclusive fishing window.
-- [X] T028 Run `pytest`, `compileall`, and dummy-SDL renderer checks from `specs/005-wave-rest-countdown/quickstart.md`; fix regressions in `src/` and `tests/`.
-- [X] T029 Manually verify fishing during rest, fishing blocked during active waves, deadline cancellation, clock orientation, bottom-center placement, and resumed Wave 2 gameplay in `src/game/state.py` and `src/presentation/renderer.py`.
+---
+
+## Phase 4: User Story 2 - Angeln während der Ruhephase (Priority: P1)
+
+**Goal**: Preserve fishing as the exclusive rest-phase interaction while the WormTimer continues independently.
+
+**Independent Test**: Start fishing during rest, advance time while fishing, verify the WormTimer continues progressing, then verify fishing remains blocked during an active wave.
+
+### Tests for User Story 2
+
+- [X] T015 [P] [US2] Extend state tests to verify fishing input does not pause rest progress or WormTimer progress in `tests/unit/test_state.py`
+- [X] T016 [P] [US2] Extend smoke coverage to verify rest-phase fishing still starts and active-wave fishing remains blocked in `tests/smoke/test_launch_contract.py`
+
+### Implementation for User Story 2
+
+- [X] T017 [US2] Preserve and, where needed, adjust rest-phase fishing eligibility while using the configurable transition timer in `src/game/state.py`
+- [X] T018 [US2] Ensure the renderer draws WormTimer independently of fishing overlays and keeps WormTimer visibility tied only to the rest workflow phase in `src/presentation/renderer.py`
+
+**Checkpoint**: User Story 2 is independently functional: fishing remains available only during rest and cannot alter the WormTimer or timer progression.
+
+---
+
+## Phase 5: User Story 3 - Automatischer Übergang zur nächsten Wave (Priority: P1)
+
+**Goal**: At rest expiry, finish the WormTimer at the right endpoint, start exactly one next wave, hide the timer, and cancel active fishing without reward.
+
+**Independent Test**: Advance a rest phase to zero with and without an active fishing attempt; verify one next wave, no negative timer, no reward at the boundary, and no visible WormTimer afterward.
+
+### Tests for User Story 3
+
+- [X] T019 [P] [US3] Add boundary tests for right-end WormTimer progress, timer hiding, one-time wave creation, and restart reset in `tests/unit/test_state.py`
+- [X] T020 [P] [US3] Add regression coverage for cancellation without stamina reward when rest expires during fishing in `tests/unit/test_state.py`
+
+### Implementation for User Story 3
+
+- [X] T021 [US3] Preserve transition-before-fishing-reward ordering and reset active fishing at the configured rest boundary in `src/game/state.py`
+- [X] T022 [US3] Ensure restart returns to Wave 1 with no visible WormTimer and no stale animation frame in `src/game/state.py` and `src/presentation/renderer.py`
+
+**Checkpoint**: User Story 3 is independently functional: wave transition, timer visibility, fishing cancellation, and restart behavior satisfy the deadline rules.
+
+---
+
+## Phase 6: Polish & Cross-Cutting Concerns
+
+**Purpose**: Validate the complete feature, remove obsolete implementation details, and preserve launchability.
+
+- [X] T023 [P] Update countdown-related names, comments, and docstrings to describe WormTimer rather than the removed semicircular countdown in `src/game/state.py`, `src/presentation/renderer.py`, and `tests/`
+- [X] T024 [P] Add validation that non-positive `WAVE_REST_DURATION` and `WORM_TIMER_FPS` fail clearly in `src/game/config.py` or the consuming pure helpers, with coverage in `tests/unit/`
+- [X] T025 Run the complete automated suite and compile check from `specs/005-wave-rest-countdown/quickstart.md`
+- [X] T026 Run the headless smoke validation and manually verify the WormTimer at reference window sizes 960×640, 800×600, and 1280×720 using `specs/005-wave-rest-countdown/quickstart.md`
+
+---
 
 ## Dependencies & Execution Order
 
-- **Setup (Phase 1)**: No dependencies.
-- **Foundational (Phase 2)**: Depends on Setup and blocks all user stories.
-- **US1 (P1)**: Depends on Phase 2 and delivers the MVP countdown UI.
-- **US2 (P1)**: Depends on US1 workflow phase/snapshot data and defines the exclusive fishing window.
-- **US3 (P1)**: Depends on US2 fishing eligibility and validates deadline cancellation.
-- **Polish (Phase 6)**: Depends on all three user stories.
+### Phase Dependencies
+
+- **Phase 1 Setup**: No dependencies; confirm paths and validation commands.
+- **Phase 2 Foundational**: Depends on Setup; blocks all user stories.
+- **Phase 3 US1**: Depends on Foundational; delivers the MVP visual and timing slice.
+- **Phase 4 US2**: Depends on Foundational and integrates with the US1 timer presentation; fishing behavior must remain independently testable.
+- **Phase 5 US3**: Depends on Foundational and the transition behavior exercised by US1/US2; validates the expiry boundary.
+- **Phase 6 Polish**: Depends on all required user stories.
+
+### User Story Dependencies
+
+- **US1 (P1)**: Can start after Phase 2; MVP.
+- **US2 (P1)**: Can start after Phase 2, but renderer integration should follow the shared snapshot shape from US1.
+- **US3 (P1)**: Can start after Phase 2; boundary tests depend on the shared configurable timer and snapshot semantics.
 
 ### Parallel Opportunities
 
-- T004 and T005 can run in parallel.
-- T007–T009 can run in parallel before US1 implementation.
-- T013–T016 can run in parallel before US2 implementation.
-- T020–T023 can run in parallel before US3 implementation.
-- T026–T027 can run in parallel with final validation.
+- T004 and T005 can run in parallel with T003 only if the constants are agreed; otherwise T005 follows T004.
+- T007, T008, and T009 can run in parallel because they target separate test concerns/files.
+- T015 and T016 can run in parallel.
+- T019 and T020 can run in parallel before the transition-order implementation is finalized.
+- T023 and T024 can run in parallel after core implementation.
+
+## Parallel Execution Examples
+
+### User Story 1
+
+```text
+Task group A: T007 snapshot tests in tests/unit/test_ui_snapshot.py
+Task group B: T008 transition tests in tests/unit/test_wave_transition.py
+Task group C: T009 layout tests in tests/unit/test_ui_layout.py
+Then: T011 snapshot implementation, T012 placement helper, T013 renderer integration
+```
+
+### User Story 2
+
+```text
+Task group A: T015 state/fishing regression tests in tests/unit/test_state.py
+Task group B: T016 smoke fishing regression tests in tests/smoke/test_launch_contract.py
+Then: T017 state preservation and T018 renderer integration
+```
+
+### User Story 3
+
+```text
+Task group A: T019 transition visibility/restart tests in tests/unit/test_state.py
+Task group B: T020 fishing-boundary reward test in tests/unit/test_state.py
+Then: T021 transition ordering and T022 restart cleanup
+```
 
 ## Implementation Strategy
 
-### MVP First (User Story 1 Only)
+### MVP First
 
-1. Complete Setup and Foundational phases.
-2. Implement US1 snapshot and bottom-center clock rendering.
-3. Validate the ten-second rest display independently.
+1. Complete Phase 1 Setup and Phase 2 Foundational.
+2. Complete Phase 3 User Story 1.
+3. Run the US1 tests and headless renderer check.
+4. Stop for validation/demo: the configurable WormTimer is already visible and time-synchronized.
 
 ### Incremental Delivery
 
-1. Add US2 and verify fishing is available only during rest.
-2. Add US3 and verify exact transition, deadline cancellation, and active-wave fishing blocking.
-3. Complete documentation and full validation.
+1. Add US1 for the WormTimer visual and configurable duration.
+2. Add US2 regression protection for fishing during rest.
+3. Add US3 boundary and restart behavior.
+4. Finish cross-cutting validation and manual window-size checks.
 
 ## Notes
 
-- Every task uses the checkbox format with a sequential `T###` ID, optional `[P]`/`[US#]` labels, and a file path.
-- `[P]` is used only where tasks can proceed independently without conflicting edits.
-- Tests should be written before implementation and must fail for missing behavior first.
+- Every task uses the required checklist format: checkbox, sequential ID, optional `[P]`, story label where applicable, and an exact file path.
+- No external contracts are needed for this internal offline Pygame application.
+- Existing Fishing, Stamina, document workflow, Game Over, and restart rules remain in scope and must not regress.

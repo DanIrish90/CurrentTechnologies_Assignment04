@@ -6,6 +6,7 @@ from presentation.ui_assets import (
     game_over_rect,
     interaction_button_rect,
     stamina_bar_rect,
+    worm_timer_rect,
 )
 
 
@@ -34,6 +35,19 @@ def test_stamina_bar_scale_is_positive_and_independent() -> None:
     assert half.topleft == enlarged.topleft == normal.topleft == (16, 16)
     with pytest.raises(ValueError):
         stamina_bar_rect((960, 640), (320, 64), 16, 0)
+
+
+def test_worm_timer_moves_below_stamina_bar_and_stays_visible() -> None:
+    stamina = stamina_bar_rect((960, 640), (320, 64), 16, 0.5)
+    start = worm_timer_rect((960, 640), stamina, (64, 32), 0.0)
+    end = worm_timer_rect((960, 640), stamina, (64, 32), 1.0)
+
+    assert start.top >= stamina.bottom
+    assert start.left == stamina.left
+    assert end.right == stamina.right
+    assert end.left > start.left
+    assert 0 <= start.left and start.right <= 960
+    assert 0 <= end.top and end.bottom <= 640
 
 
 def test_game_over_is_contained_and_centered() -> None:

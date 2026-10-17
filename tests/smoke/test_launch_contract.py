@@ -160,6 +160,9 @@ def test_fishing_pond_cast_and_reward_contract() -> None:
     pond = replace(state, player=state.player.at(_pond_position(state)))
     waiting = update_game_state(pond, InputState(interact_pressed=True), 0)
     assert waiting.fishing.phase is FishingPhase.WAITING_FOR_BITE
+    progressed = update_game_state(waiting, InputState(), 0.5)
+    assert ui_snapshot(progressed).rest_elapsed_progress > ui_snapshot(waiting).rest_elapsed_progress
+    assert ui_snapshot(progressed).rest_countdown_visible
     active = replace(
         pond,
         stamina=StaminaState(current=50),
@@ -176,7 +179,7 @@ def test_fishing_pond_cast_and_reward_contract() -> None:
     assert caught.fishing.phase is FishingPhase.IDLE
 
 
-def test_countdown_overlay_renders_during_rest_without_display_errors() -> None:
+def test_worm_timer_renders_during_rest_without_display_errors() -> None:
     import pygame
     from presentation.bureaucrat_animation import BureaucratAnimationManager, load_bureaucrat_frames
     from presentation.character_animation import CharacterAnimator, load_character_frames
@@ -198,6 +201,9 @@ def test_countdown_overlay_renders_during_rest_without_display_errors() -> None:
         CharacterAnimator(load_character_frames()),
         bureaucrat_animation,
     )
+    renderer_source = Path("src/presentation/renderer.py").read_text(encoding="utf-8")
+    assert "pygame.draw.arc" not in renderer_source
+    assert "worm_timer_frames" in renderer_source
     pygame.font.quit()
     pygame.display.quit()
 

@@ -4,12 +4,14 @@ import pytest
 from dataclasses import replace
 
 from game.geometry import Vector2
+from game import config
 from game.bureaucracy import advance_progress, collect_initial_document, handover
 from game.bureaucracy import WorkflowPhase
 from game.fishing import FishingPhase, FishingState
 from game.input_state import InputState
-from game.state import create_game_state, update_game_state
+from game.state import create_game_state, ui_snapshot, update_game_state
 from game.zoom import logical_viewport
+from game.stamina import StaminaState
 
 
 def _source_position(state):
@@ -82,10 +84,10 @@ def test_player_can_move_during_transition_feedback() -> None:
     updated = update_game_state(transitioning, InputState(right=True), 0.5)
     assert updated.player.position.x > state.player.position.x
     assert updated.workflow is not None
-    assert updated.workflow.transition_remaining == 9.5
+    assert updated.workflow.transition_remaining == config.WAVE_REST_DURATION - 0.5
 
 
-def test_rest_countdown_is_independent_from_fishing() -> None:
+def test_worm_timer_is_independent_from_fishing() -> None:
     state = create_game_state()
     rest = replace(_rest_state(state), player=state.player.at(_pond_position(state)))
     cast = update_game_state(rest, InputState(interact_pressed=True), 0)
@@ -93,6 +95,8 @@ def test_rest_countdown_is_independent_from_fishing() -> None:
     assert advanced.workflow is not None
     assert advanced.workflow.transition_remaining == 7.5
     assert advanced.fishing.phase is FishingPhase.BITE_WINDOW
+    assert ui_snapshot(advanced).rest_elapsed_progress > ui_snapshot(cast).rest_elapsed_progress
+    assert ui_snapshot(advanced).rest_countdown_visible
 
 
 def test_fishing_is_blocked_during_active_wave_and_rest_timer_is_not_relevant() -> None:
@@ -113,6 +117,39 @@ def test_fishing_remains_blocked_after_next_wave_starts() -> None:
     assert cast.workflow is not None
     assert cast.workflow.definition.wave_number == 2
     assert cast.fishing.phase is FishingPhase.IDLE
+
+
+def test_wave_expiry_hides_worm_timer_after_reaching_boundary() -> None:
+    state = create_game_state()
+    carrying, _ = collect_initial_document(state.workflow)
+    completed, _ = handover(carrying, "servant-1")
+    rest = replace(
+        state,
+        workflow=replace(completed, phase=WorkflowPhase.TRANSITIONING, transition_remaining=0.1),
+    )
+
+    before = ui_snapshot(rest)
+    updated = update_game_state(rest, InputState(), 0.1)
+
+    assert before.rest_elapsed_progress == pytest.approx(0.99)
+    assert updated.workflow is not None
+    assert updated.workflow.definition.wave_number == 2
+    assert not ui_snapshot(updated).rest_countdown_visible
+    assert ui_snapshot(updated).worm_timer_frame_index == 0
+
+
+def test_restart_clears_worm_timer_state() -> None:
+    state = create_game_state()
+    exhausted = replace(state, game_over=True, stamina=StaminaState(current=0, game_over=True))
+    restarted = update_game_state(
+        exhausted,
+        InputState(mouse_clicked=True, mouse_position=Vector2(480, 370)),
+        0,
+    )
+
+    snapshot = ui_snapshot(restarted)
+    assert not snapshot.rest_countdown_visible
+    assert snapshot.worm_timer_frame_index == 0
 
 
 @pytest.mark.parametrize("phase", [FishingPhase.WAITING_FOR_BITE, FishingPhase.BITE_WINDOW, FishingPhase.CATCHING])

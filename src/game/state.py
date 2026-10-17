@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import math
 
 from . import config
 from .bureaucracy import (
@@ -51,6 +52,8 @@ class UiSnapshot:
     rest_wave_number: int = 0
     rest_seconds_remaining: float = 0.0
     rest_progress: float = 0.0
+    rest_elapsed_progress: float = 0.0
+    worm_timer_frame_index: int = 0
     interaction_available: bool = False
     stamina_ratio: float = 1.0
     stamina_color_state: str = "green"
@@ -70,6 +73,7 @@ class GameState:
 
 
 def create_game_state(viewport_size: Vector2 | None = None) -> GameState:
+    config.validate_worm_timer_configuration()
     map_data = load_map(config.WORLD_MAP_PATH)
     world = map_data.world
     positions = tuple(map_data.servant_spawns[index] for index in sorted(map_data.servant_spawns))
@@ -291,10 +295,20 @@ def ui_snapshot(state: GameState) -> UiSnapshot:
     interaction_available = _interaction_available(state)
     rest_visible = workflow is not None and workflow.phase is not WorkflowPhase.ACTIVE
     rest_seconds = (
-        max(0.0, min(config.DOCUMENT_TRANSITION_SECONDS, workflow.transition_remaining))
+        max(0.0, min(config.WAVE_REST_DURATION, workflow.transition_remaining))
         if rest_visible and workflow is not None else 0.0
     )
-    rest_progress = rest_seconds / config.DOCUMENT_TRANSITION_SECONDS if rest_visible else 0.0
+    rest_progress = rest_seconds / config.WAVE_REST_DURATION if rest_visible else 0.0
+    rest_elapsed_progress = 1.0 - rest_progress if rest_visible else 0.0
+    rest_elapsed_seconds = (
+        config.WAVE_REST_DURATION - rest_seconds if rest_visible else 0.0
+    )
+    worm_timer_frame_index = (
+        int(math.floor(rest_elapsed_seconds * config.WORM_TIMER_FPS))
+        % config.WORM_TIMER_FRAME_COUNT
+        if rest_visible
+        else 0
+    )
     if workflow is None:
         return UiSnapshot(
             title="I am from the Government",
@@ -315,6 +329,8 @@ def ui_snapshot(state: GameState) -> UiSnapshot:
                 and rest_visible
             ),
             rest_countdown_visible=False,
+            rest_elapsed_progress=0.0,
+            worm_timer_frame_index=0,
             interaction_available=interaction_available,
             stamina_ratio=stamina_ratio,
             stamina_color_state=stamina_color_state,
@@ -360,6 +376,8 @@ def ui_snapshot(state: GameState) -> UiSnapshot:
         rest_wave_number=workflow.definition.wave_number,
         rest_seconds_remaining=rest_seconds,
         rest_progress=rest_progress,
+        rest_elapsed_progress=rest_elapsed_progress,
+        worm_timer_frame_index=worm_timer_frame_index,
         interaction_available=interaction_available,
         stamina_ratio=stamina_ratio,
         stamina_color_state=stamina_color_state,

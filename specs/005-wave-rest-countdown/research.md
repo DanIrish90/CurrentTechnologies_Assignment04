@@ -1,34 +1,34 @@
 # Research: Wave Rest Countdown
 
 **Feature**: [005-wave-rest-countdown](./spec.md)
-**Date**: 2026-10-13
+**Date**: 2026-10-17
 
-## Decision 1: Reuse the existing workflow transition timer
+## Decision 1: Keep one authoritative rest timer
 
-- **Decision**: Use `WaveProgress.transition_remaining` and `advance_progress` as the single authoritative ten-second rest countdown.
-- **Rationale**: The existing bureaucracy workflow already starts the timer when the final servant is served, transitions through completion feedback, clamps remaining time at zero, and creates the next wave exactly once. Reusing it avoids duplicate timers and preserves deterministic wave progression.
-- **Alternatives considered**: Add a separate rest-phase timer to `GameState` (rejected because it could drift from workflow progression); use rendering time (rejected because gameplay rules must not depend on rendering).
+- **Decision**: Continue using `WaveProgress.transition_remaining` and `advance_progress`; make the duration come from `config.WAVE_REST_DURATION`, default `10.0`.
+- **Rationale**: Wave transition, fishing cancellation, clamping, and one-time next-wave creation already use this timer. A second timer could drift from gameplay state.
+- **Alternatives considered**: A renderer-owned timer was rejected because rendering must not drive gameplay; a separate `GameState` timer was rejected because it duplicates workflow state.
 
-## Decision 2: Expose a derived countdown UI snapshot
+## Decision 2: Derive WormTimer presentation state from simulation time
 
-- **Decision**: Add derived rest-countdown fields to `UiSnapshot`: visibility, completed wave number, remaining seconds, and normalized progress.
-- **Rationale**: The renderer should consume presentation data without owning workflow state or mutating the timer. The existing workflow phase determines whether the overlay is visible.
-- **Alternatives considered**: Read `WaveProgress` directly in the renderer (rejected because it couples presentation to domain state); store a second countdown value in the renderer (rejected because it can become inconsistent).
+- **Decision**: Extend `UiSnapshot` with rest elapsed progress and a deterministic WormTimer frame index derived from elapsed rest time and `WORM_TIMER_FPS`.
+- **Rationale**: The renderer needs stable, testable inputs while remaining independent from domain objects. Movement can use normalized elapsed progress, and animation can loop independently.
+- **Alternatives considered**: Advancing frames inside `renderer.py` was rejected because it depends on render frequency; tying worm position to frame index was rejected because animation speed must not alter the rest duration.
 
-## Decision 3: Restrict fishing to the rest phase
+## Decision 3: Split the existing asset as seven horizontal frames
 
-- **Decision**: Treat `COMPLETION_FEEDBACK` and `TRANSITIONING` as the only workflow phases eligible for casting. Block casting during `ACTIVE` waves, including inside the Fishing Pond.
-- **Rationale**: The clarified UX makes the rest phase the exclusive recovery and fishing window, creating a clear separation between document work and stamina recovery.
-- **Alternatives considered**: Allow fishing during active waves (rejected by clarification); disable only the Fishing Pond visually (rejected because game rules must enforce the interaction restriction).
+- **Decision**: Validate `WormTimer.png` as 448×32 and split it into seven 64×32 surfaces from left to right.
+- **Rationale**: This matches the provided asset and the clarified requirement. A small pure helper makes dimensions and frame order directly testable.
+- **Alternatives considered**: Treating the image as one static texture was rejected because the feature requires animation; inferring frame size at runtime was rejected because it hides asset errors.
 
-## Decision 4: Treat wave expiry as authoritative over stale fishing state
+## Decision 4: Anchor movement to the stamina-bar geometry
 
-- **Decision**: Advance workflow timing before applying fishing rewards. If the update creates the next wave, reset fishing to `IDLE` and discard any fishing outcome from that same update.
-- **Rationale**: This implements the explicit deadline rule and prevents a simultaneous catch from awarding stamina after the next wave has already started.
-- **Alternatives considered**: Let a stale fishing state resolve before the wave transition (rejected because it could award a reward in the next wave); pause the countdown during input (rejected because rest time must continue running).
+- **Decision**: Place the worm below the rendered stamina bar and interpolate its anchor from the bar's left edge to its right edge using elapsed rest progress. Apply the existing UI zoom/scale conventions consistently.
+- **Rationale**: The bar is the player's stable reference for stamina and gives the rest phase a clear spatial start/end. The endpoint remains correct for every positive rest duration and animation speed.
+- **Alternatives considered**: Bottom-center placement was rejected because it conflicts with the clarified position; a fixed pixel speed was rejected because it would fail for configurable durations.
 
-## Decision 5: Render an upward-facing bottom-center clock
+## Decision 5: Preserve the fishing and transition ordering
 
-- **Decision**: Draw the arc in the upper half of a bottom-center panel, with the completed-wave number and numeric seconds inside it.
-- **Rationale**: The clarified orientation makes the clock read as a bow-up semicircle and the bottom-center position keeps the playfield readable while making the transition state prominent.
-- **Alternatives considered**: Full circular timer (rejected because the requested visual language is a semicircle); text-only countdown (rejected because it provides weaker spatial progress feedback).
+- **Decision**: Do not alter fishing eligibility or the deadline ordering: when rest expires, the next wave starts once, active fishing is cancelled, and no simultaneous fishing reward is granted.
+- **Rationale**: The requested change is visual/configuration-focused and the existing rule is explicitly covered by the feature specification.
+- **Alternatives considered**: Pausing the WormTimer while fishing was rejected because rest continues independent of input; awarding a catch at the boundary was rejected by the clarified deadline rule.

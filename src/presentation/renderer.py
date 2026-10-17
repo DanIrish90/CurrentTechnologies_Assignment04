@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from pathlib import Path
 import pygame
@@ -21,6 +20,7 @@ from .ui_assets import (
     interaction_button_rect,
     load_ui_assets,
     stamina_bar_rect,
+    worm_timer_rect,
 )
 
 
@@ -216,11 +216,12 @@ def render(
             screen.blit(frame, character_sprite_rect(frame, actor_rect))
     _draw_map(screen, state, camera, foreground=True)
     snapshot = ui_snapshot(state)
-    _draw_ui(screen, snapshot, ui_assets or load_ui_assets())
+    assets = ui_assets or load_ui_assets()
+    _draw_ui(screen, snapshot, assets)
     if snapshot.fishing_visible:
         _draw_fishing_overlay(screen, snapshot)
     if snapshot.rest_countdown_visible:
-        _draw_rest_countdown(screen, snapshot)
+        _draw_worm_timer(screen, snapshot, assets)
 
 
 def _draw_ui(screen: pygame.Surface, snapshot: UiSnapshot, assets: UiAssets) -> None:
@@ -310,27 +311,22 @@ def _draw_fishing_overlay(screen: pygame.Surface, snapshot: UiSnapshot) -> None:
     screen.blit(small_font.render(f"FISHING PROGRESS {snapshot.fishing_progress:.0f}%", True, config.UI_TEXT_COLOR), (700, 190))
 
 
-def _draw_rest_countdown(screen: pygame.Surface, snapshot: UiSnapshot) -> None:
-    """Draw a readable semicircular countdown during the wave rest."""
-    center = (
-        screen.get_width() // 2,
-        screen.get_height() - config.WAVE_REST_COUNTDOWN_BOTTOM_MARGIN,
+def _draw_worm_timer(
+    screen: pygame.Surface, snapshot: UiSnapshot, assets: UiAssets
+) -> None:
+    """Draw the animated WormTimer below the stamina bar during rest."""
+
+    stamina_rect = stamina_bar_rect(
+        screen.get_size(),
+        (config.UI_STAMINA_BAR_WIDTH, config.UI_STAMINA_BAR_HEIGHT),
+        config.UI_MARGIN,
+        config.UI_STAMINA_BAR_SCALE,
     )
-    rect = pygame.Rect(
-        center[0] - config.WAVE_REST_COUNTDOWN_WIDTH // 2,
-        center[1] - config.WAVE_REST_COUNTDOWN_HEIGHT // 2,
-        config.WAVE_REST_COUNTDOWN_WIDTH,
-        config.WAVE_REST_COUNTDOWN_HEIGHT,
+    frame = assets.worm_timer_frames[snapshot.worm_timer_frame_index]
+    timer_rect = worm_timer_rect(
+        screen.get_size(),
+        stamina_rect,
+        frame.get_size(),
+        snapshot.rest_elapsed_progress,
     )
-    panel = rect.inflate(36, 54)
-    pygame.draw.rect(screen, config.UI_PANEL_COLOR, panel)
-    pygame.draw.rect(screen, config.UI_TEXT_COLOR, panel, width=2)
-    pygame.draw.arc(screen, config.STAMINA_BAR_BACKGROUND_COLOR, rect, 0, math.pi, config.WAVE_REST_COUNTDOWN_ARC_WIDTH)
-    if snapshot.rest_progress > 0:
-        pygame.draw.arc(screen, config.FEEDBACK_SUCCESS_COLOR, rect, 0, math.pi * snapshot.rest_progress, config.WAVE_REST_COUNTDOWN_ARC_WIDTH)
-    font = pygame.font.Font(None, 46)
-    small_font = pygame.font.Font(None, 24)
-    wave = font.render(str(snapshot.rest_wave_number), True, config.UI_TEXT_COLOR)
-    seconds = small_font.render(f"{snapshot.rest_seconds_remaining:.1f}s", True, config.UI_TEXT_COLOR)
-    screen.blit(wave, wave.get_rect(center=(center[0], center[1] - 10)))
-    screen.blit(seconds, seconds.get_rect(center=(center[0], center[1] + 26)))
+    screen.blit(pygame.transform.scale(frame, timer_rect.size), timer_rect)

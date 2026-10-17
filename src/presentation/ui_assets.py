@@ -30,6 +30,7 @@ class UiAssets:
     stamina_frame: pygame.Surface
     stamina_fill: pygame.Surface
     game_over: pygame.Surface
+    worm_timer_frames: tuple[pygame.Surface, ...]
 
     def colorized_stamina_fill(self, color: StaminaColor) -> pygame.Surface:
         tinted = self.stamina_fill.copy()
@@ -44,16 +45,47 @@ def _load(path: str, expected_size: tuple[int, int]) -> pygame.Surface:
     return surface
 
 
+def split_worm_timer_frames(surface: pygame.Surface) -> tuple[pygame.Surface, ...]:
+    expected_size = (
+        config.WORM_TIMER_FRAME_WIDTH * config.WORM_TIMER_FRAME_COUNT,
+        config.WORM_TIMER_FRAME_HEIGHT,
+    )
+    if surface.get_size() != expected_size:
+        raise ValueError(
+            f"WormTimer sheet must be {expected_size[0]}x{expected_size[1]}"
+        )
+    return tuple(
+        surface.subsurface(
+            (
+                index * config.WORM_TIMER_FRAME_WIDTH,
+                0,
+                config.WORM_TIMER_FRAME_WIDTH,
+                config.WORM_TIMER_FRAME_HEIGHT,
+            )
+        ).copy()
+        for index in range(config.WORM_TIMER_FRAME_COUNT)
+    )
+
+
 @lru_cache(maxsize=1)
 def load_ui_assets() -> UiAssets:
     """Load and split the fixed UserInterface art once per process."""
 
+    config.validate_worm_timer_configuration()
     stamina = _load(config.UI_STAMINA_BAR_ASSET_PATH, (config.UI_STAMINA_BAR_WIDTH, config.UI_STAMINA_BAR_HEIGHT))
+    worm_timer = _load(
+        config.WORM_TIMER_ASSET_PATH,
+        (
+            config.WORM_TIMER_FRAME_WIDTH * config.WORM_TIMER_FRAME_COUNT,
+            config.WORM_TIMER_FRAME_HEIGHT,
+        ),
+    )
     return UiAssets(
         interaction_button=_load(config.UI_INTERACTION_BUTTON_ASSET_PATH, (128, 128)),
         stamina_frame=stamina.subsurface((0, 0, config.UI_STAMINA_BAR_WIDTH, config.UI_STAMINA_FRAME_HEIGHT)).copy(),
         stamina_fill=stamina.subsurface((0, config.UI_STAMINA_FRAME_HEIGHT, config.UI_STAMINA_BAR_WIDTH, config.UI_STAMINA_FRAME_HEIGHT)).copy(),
         game_over=_load(config.UI_GAME_OVER_ASSET_PATH, (1024, 256)),
+        worm_timer_frames=split_worm_timer_frames(worm_timer),
     )
 
 
@@ -81,6 +113,32 @@ def stamina_bar_rect(
     )
     size = (max(1, round(desired_size[0] * fit)), max(1, round(desired_size[1] * fit)))
     return pygame.Rect(margin, margin, *size)
+
+
+def worm_timer_rect(
+    surface_size: tuple[int, int],
+    stamina_rect: pygame.Rect,
+    frame_size: tuple[int, int],
+    progress: float,
+    gap: int = 2,
+) -> pygame.Rect:
+    """Place a WormTimer frame below the stamina bar along its width."""
+
+    width, height = surface_size
+    normalized = max(0.0, min(1.0, progress))
+    scale = stamina_rect.width / config.UI_STAMINA_BAR_WIDTH
+    scaled_size = (
+        max(1, round(frame_size[0] * scale)),
+        max(1, round(frame_size[1] * scale)),
+    )
+    travel = max(0, stamina_rect.width - scaled_size[0])
+    x = stamina_rect.left + round(travel * normalized)
+    y = stamina_rect.bottom + gap
+    return pygame.Rect(
+        max(0, min(x, width - scaled_size[0])),
+        max(0, min(y, height - scaled_size[1])),
+        *scaled_size,
+    )
 
 
 def interaction_button_rect(

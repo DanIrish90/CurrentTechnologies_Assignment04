@@ -15,31 +15,27 @@ From the repository root:
 ./.venv/bin/python -m compileall -q src main.py tests
 ```
 
-Expected result: existing movement, bureaucracy, fishing, stamina, game-over, and Restart tests remain passing together with the countdown tests.
+Expected result: existing gameplay, fishing, UI, and smoke tests remain passing, including the WormTimer-specific tests.
 
-## Deterministic countdown scenarios
+## Deterministic feature checks
 
-1. Complete Wave 1 by serving its Civil Servant; verify the workflow enters completion feedback with 10.0 seconds remaining.
-2. Advance 2.5 seconds; verify the remaining time is 7.5 seconds and the semicircular countdown is partially empty.
-3. Verify the center label identifies the completed wave as `WAVE 1` while the countdown is active.
-4. During the rest phase, stand empty-handed in the Fishing Pond and press `E`; verify a fishing phase starts and the rest timer continues to decrease.
-5. During an active wave, stand in the Fishing Pond and press `E`; verify no fishing phase starts.
-6. Advance the rest phase to zero; verify the next wave is created, the countdown is hidden, and active-wave fishing remains blocked.
-7. Complete a zero-time boundary update more than once; verify exactly one next wave is created and the timer never becomes negative.
-8. Restart after game over; verify Wave 1 is active and no rest countdown is visible.
+1. Complete Wave 1 and verify the rest phase starts with `WAVE_REST_DURATION` remaining; default configuration must report 10.0 seconds.
+2. Change `WAVE_REST_DURATION` to another positive value and verify the next-wave transition occurs exactly at that duration.
+3. During rest, verify `rest_countdown_visible` is true, the WormTimer is rendered below the stamina bar, and the worm position progresses monotonically from the bar's left edge toward its right edge.
+4. Set at least two positive `WORM_TIMER_FPS` values and verify frame selection changes at the configured rate while rest duration and worm position remain unchanged.
+5. Verify the 448×32 asset is loaded as seven 64×32 frames in left-to-right order and frames loop during rest.
+6. Advance rest to zero and verify the worm reaches the right endpoint, the WormTimer disappears, the next wave starts once, and any active fishing attempt ends without reward.
+7. During an active wave, including inside the Fishing Pond, verify fishing remains blocked and the WormTimer is hidden.
+8. Restart after Game Over and verify Wave 1 is active with no rest countdown or WormTimer visible.
 
-The renderer can be checked without a display using `SDL_VIDEODRIVER=dummy` and `SDL_AUDIODRIVER=dummy`; the countdown and fishing overlays should render without exceptions.
+## Headless rendering
 
-## Headless and manual checks
+Use dummy SDL drivers for display-independent checks:
 
-Run the existing dummy-SDL launch/quit smoke path and render a completed-wave state without a display. On a desktop display, verify:
+```bash
+SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy ./.venv/bin/python -m pytest -q tests/smoke/test_launch_contract.py
+```
 
-- the upward-facing semicircular arc is readable without depending on color alone;
-- the clock is horizontally centered near the bottom of the screen;
-- the completed wave number is centered inside the overlay;
-- remaining seconds are readable and decrease smoothly;
-- the overlay disappears when the next wave begins;
-- fishing input starts a fishing attempt during rest;
-- fishing input is blocked after the next wave starts.
+Expected result: the rest UI renders without exceptions, the WormTimer is below the stamina bar, and the obsolete semicircular countdown is absent.
 
-See [data-model.md](./data-model.md) for state derivation and [spec.md](./spec.md) for acceptance criteria.
+See [data-model.md](./data-model.md) for fields and invariants and [spec.md](./spec.md) for acceptance criteria.
