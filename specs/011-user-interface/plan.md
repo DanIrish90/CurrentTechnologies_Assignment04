@@ -1,12 +1,12 @@
 # Implementation Plan: User Interface Overlay Refresh
 
-**Branch**: `011-user-interface` | **Date**: 2026-10-16 | **Spec**: [spec.md](./spec.md)
+**Branch**: `011-user-interface` | **Date**: 2026-10-18 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `/specs/011-user-interface/spec.md`
 
 ## Summary
 
-Replace the current debug-style HUD and world-object labels with the existing UserInterface art. The simulation will expose only the UI state needed for presentation: whether an interaction is currently actionable, the normalized stamina ratio, and whether GameOver is active. A focused presentation layer will load and validate `InteractionButton.png`, `StaminaBar.png`, and `GameOver.png`, compose the stamina frame/fill, apply a separately configurable StaminaBar scale, draw the interaction hint in the lower third, and center the GameOver banner. The Fishing mini-game remains unchanged; stamina recovery is exclusively awarded after a successful catch, while passive recovery from merely standing in the pond is removed.
+Replace the current debug-style HUD and world-object labels with the existing UserInterface art. The simulation will expose only the UI state needed for presentation: whether an interaction is currently actionable, the normalized stamina ratio, and whether GameOver is active. A focused presentation layer will load and validate the existing HUD assets plus `FishingMeter.png`, compose the stamina frame/fill, apply a separately configurable StaminaBar scale, draw the interaction hint in the lower third, and center the GameOver banner. The Fishing mini-game keeps its gameplay rules but receives a modal, centered 128×448-pixel FishingMeter presentation with explicit bait, bite, catching, success, and failure icon states; bait and bite icons are centered inside the left 64×448 bar, while stamina recovery remains exclusively awarded after a successful catch.
 
 ## Technical Context
 
@@ -24,9 +24,9 @@ Replace the current debug-style HUD and world-object labels with the existing Us
 
 **Performance Goals**: Preserve the existing 60 FPS target; load and split UI assets once rather than repeatedly loading files in the frame loop; apply the StaminaBar scale through layout calculations without per-frame asset reloads
 
-**Constraints**: Keep gameplay state and world coordinates unchanged; preserve pixel-art readability, the Feature 010 zoom surface, window resizing, fishing overlays that are still gameplay-required, the existing restart interaction, and the exact Fishing mini-game sequence and successful-catch stamina reward. Remove pond-only stamina recovery, and expose a positive StaminaBar scale with default `1.0` that affects only the StaminaBar in addition to Feature-010 zoom.
+**Constraints**: Keep gameplay state, fishing rules, and world coordinates unchanged; preserve pixel-art readability, the Feature 010 zoom surface for existing UI, window resizing, the existing restart interaction, and the exact Fishing sequence and successful-catch stamina reward. The FishingMeter is a deliberate exception: render the full 128×448 sheet at native size, including its 64×448 bar region and right-side icons, centered and independent of UI zoom. Fishing pauses movement and unrelated actions while active. Remove pond-only stamina recovery, and expose a positive StaminaBar scale with default `1.0` that affects only the StaminaBar in addition to Feature-010 zoom.
 
-**Scale/Scope**: One HUD replacement, one contextual interaction hint, one independently scalable stamina indicator, one GameOver banner, three existing PNG assets, the Fishing/stamina regression adjustment, and focused render/state regressions
+**Scale/Scope**: One HUD replacement, one contextual interaction hint, one independently scalable stamina indicator, one GameOver banner, one native-size FishingMeter sheet with six 64×64 states, the Fishing/stamina regression adjustment, and focused render/state regressions
 
 ## Constitution Check
 
@@ -59,7 +59,8 @@ specs/011-user-interface/
 assets/UserInterface/
 ├── InteractionButton.png
 ├── StaminaBar.png
-└── GameOver.png
+├── GameOver.png
+└── FishingMeter.png
 
 src/game/
 └── state.py              # derived interaction visibility and UI snapshot data
@@ -73,7 +74,7 @@ tests/
 └── unit/
 ```
 
-**Structure Decision**: Keep the existing modular desktop-game layout. The state layer computes presentation facts from authoritative gameplay state; the presentation layer owns asset loading, sprite slicing, colors, positioning, and rendering. No external contract or new dependency is required.
+**Structure Decision**: Keep the existing modular desktop-game layout. The state layer computes presentation facts from authoritative gameplay state; the presentation layer owns asset loading, sprite slicing, colors, positioning, and rendering. Extend the immutable UI snapshot with FishingMeter phase/feedback data without moving fishing rules into rendering. No external contract or new dependency is required.
 
 ## Complexity Tracking
 
@@ -81,9 +82,9 @@ No constitution violations. Existing rendering and state boundaries are sufficie
 
 ## Post-Design Constitution Check
 
-- **Gameplay First**: PASS. The interaction hint is driven by existing actionable states, stamina/GameOver feedback becomes clearer, and recovery remains tied to successful Fishing skill rather than pond occupancy.
+- **Gameplay First**: PASS. The interaction hint and centered FishingMeter states make required actions readable, the modal catching overlay prevents unrelated input, and recovery remains tied to successful Fishing skill rather than pond occupancy.
 - **Simple, Modular Python Architecture**: PASS. The design adds one focused asset helper and extends the existing immutable UI snapshot rather than introducing a UI framework.
-- **Deterministic and Testable Game Rules**: PASS. Thresholds, action visibility, layout/scale calculations, pond non-recovery, and successful-fishing reward have deterministic coverage; headless tests cover actual asset rendering.
+- **Deterministic and Testable Game Rules**: PASS. Thresholds, action visibility, Fishing phase/icon placement, native-size layout, two-second outcome feedback, pond non-recovery, and successful-fishing reward have deterministic coverage; headless tests cover actual asset rendering.
 - **Vertical Slices and Continuous Playability**: PASS. Quickstart scenarios cover normal play, fishing, rest, exhaustion, restart, and resize.
-- **Visual Consistency and Satirical Identity**: PASS. The source art is reused, the debug panel and world labels are removed, and the zoom pipeline remains the single presentation scale boundary.
+- **Visual Consistency and Satirical Identity**: PASS. The source art is reused, the debug panel and world labels are removed, the FishingMeter remains crisp at its authored size, and existing UI continues through the established zoom pipeline.
 - **Gate result**: PASS; no unresolved technical clarifications or complexity exceptions remain.

@@ -57,6 +57,10 @@ class UiSnapshot:
     interaction_available: bool = False
     stamina_ratio: float = 1.0
     stamina_color_state: str = "green"
+    fishing_meter_visible: bool = False
+    fishing_meter_phase: str = "hidden"
+    fishing_meter_icon: str | None = None
+    fishing_outcome_elapsed: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,10 +74,13 @@ class GameState:
     stamina: StaminaState = StaminaState()
     game_over: bool = False
     fishing: FishingState = FishingState()
+    fishing_feedback: str = ""
+    fishing_feedback_elapsed: float = 0.0
 
 
 def create_game_state(viewport_size: Vector2 | None = None) -> GameState:
     config.validate_worm_timer_configuration()
+    config.validate_ui_configuration()
     map_data = load_map(config.WORLD_MAP_PATH)
     world = map_data.world
     positions = tuple(map_data.servant_spawns[index] for index in sorted(map_data.servant_spawns))
@@ -143,6 +150,8 @@ def update_game_state(
             elapsed_time=state.elapsed_time + elapsed_seconds,
             running=state.running and not input_state.quit_requested,
             fishing=create_fishing_state(),
+            fishing_feedback="",
+            fishing_feedback_elapsed=0.0,
         )
 
     pond_before = state.world.fishing_pond
@@ -162,6 +171,13 @@ def update_game_state(
     camera = update_camera(player, state.world, viewport)
     workflow = state.workflow
     fishing = state.fishing
+    fishing_feedback = state.fishing_feedback
+    fishing_feedback_elapsed = state.fishing_feedback_elapsed
+    if fishing_feedback:
+        fishing_feedback_elapsed += elapsed_seconds
+        if fishing_feedback_elapsed >= config.UI_FISHING_OUTCOME_DURATION:
+            fishing_feedback = ""
+            fishing_feedback_elapsed = 0.0
     if not rest_active:
         fishing = create_fishing_state()
     pond = state.world.fishing_pond
@@ -176,16 +192,20 @@ def update_game_state(
     )
     if fishing.phase is FishingPhase.IDLE and input_state.interact_pressed and fishing_eligible:
         fishing, _ = start_cast(fishing, eligible=True)
+        fishing_feedback = ""
+        fishing_feedback_elapsed = 0.0
     elif workflow is not None and input_state.interact_pressed and not fishing_active:
         workflow = _dispatch_interaction(replace(state, player=player, camera=camera))
     previous_workflow = workflow
     if workflow is not None:
         map_positions = state.world.servant_spawns
-        next_wave_factory = (
-            (lambda number: create_wave(number, tuple(map_positions[index] for index in sorted(map_positions)[:number])))
-            if map_positions is not None and len(map_positions) >= workflow.definition.wave_number + 1
-            else create_wave
-        )
+        next_wave_factory = create_wave
+        if map_positions is not None and len(map_positions) >= config.MAX_CIVIL_SERVANTS:
+            spawn_positions = tuple(
+                map_positions[index]
+                for index in sorted(map_positions)[:config.MAX_CIVIL_SERVANTS]
+            )
+            next_wave_factory = lambda number: create_wave(number, spawn_positions[:min(number, config.MAX_CIVIL_SERVANTS)])
         workflow = advance_progress(workflow, elapsed_seconds, next_wave_factory=next_wave_factory)
     wave_started = (
         previous_workflow is not None
@@ -213,6 +233,9 @@ def update_game_state(
             ),
             eligible=fishing_eligible,
         )
+    if fishing_outcome.caught or fishing_outcome.message == "The fish escaped.":
+        fishing_feedback = "success" if fishing_outcome.caught else "failure"
+        fishing_feedback_elapsed = 0.0
     stamina = state.stamina
     if fishing_outcome.stamina_reward > 0 and not stamina.game_over:
         stamina = replace(
@@ -234,6 +257,8 @@ def update_game_state(
         stamina=stamina,
         game_over=stamina.game_over,
         fishing=fishing,
+        fishing_feedback=fishing_feedback,
+        fishing_feedback_elapsed=fishing_feedback_elapsed,
     )
 
 
@@ -289,6 +314,20 @@ def _stamina_display(state: StaminaState) -> tuple[float, str]:
     return ratio, color_state
 
 
+def _fishing_meter_display(state: GameState, rest_visible: bool) -> tuple[bool, str, str | None, float]:
+    if state.game_over or not rest_visible:
+        return False, "hidden", None, 0.0
+    if state.fishing_feedback:
+        return True, state.fishing_feedback, state.fishing_feedback, state.fishing_feedback_elapsed
+    if state.fishing.phase is FishingPhase.WAITING_FOR_BITE:
+        return True, "waiting_for_bite", "bait", 0.0
+    if state.fishing.phase is FishingPhase.BITE_WINDOW:
+        return True, "bite_window", "bite", 0.0
+    if state.fishing.phase is FishingPhase.CATCHING:
+        return True, "catching", "fish", 0.0
+    return False, "hidden", None, 0.0
+
+
 def ui_snapshot(state: GameState) -> UiSnapshot:
     workflow = state.workflow
     stamina_ratio, stamina_color_state = _stamina_display(state.stamina)
@@ -302,6 +341,9 @@ def ui_snapshot(state: GameState) -> UiSnapshot:
     rest_elapsed_progress = 1.0 - rest_progress if rest_visible else 0.0
     rest_elapsed_seconds = (
         config.WAVE_REST_DURATION - rest_seconds if rest_visible else 0.0
+    )
+    fishing_meter_visible, fishing_meter_phase, fishing_meter_icon, fishing_outcome_elapsed = _fishing_meter_display(
+        state, rest_visible
     )
     worm_timer_frame_index = (
         int(math.floor(rest_elapsed_seconds * config.WORM_TIMER_FPS))
@@ -334,6 +376,10 @@ def ui_snapshot(state: GameState) -> UiSnapshot:
             interaction_available=interaction_available,
             stamina_ratio=stamina_ratio,
             stamina_color_state=stamina_color_state,
+            fishing_meter_visible=fishing_meter_visible,
+            fishing_meter_phase=fishing_meter_phase,
+            fishing_meter_icon=fishing_meter_icon,
+            fishing_outcome_elapsed=fishing_outcome_elapsed,
         )
     carried = workflow.carried_document
     carried_label = "Carrying: nothing" if carried is None else f"Carrying: {carried.document_type.value}"
@@ -381,4 +427,8 @@ def ui_snapshot(state: GameState) -> UiSnapshot:
         interaction_available=interaction_available,
         stamina_ratio=stamina_ratio,
         stamina_color_state=stamina_color_state,
+        fishing_meter_visible=fishing_meter_visible,
+        fishing_meter_phase=fishing_meter_phase,
+        fishing_meter_icon=fishing_meter_icon,
+        fishing_outcome_elapsed=fishing_outcome_elapsed,
     )

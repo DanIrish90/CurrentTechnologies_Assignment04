@@ -102,11 +102,26 @@ class BureaucratAnimationManager:
     states: dict[str, BureaucratAnimationState] = field(default_factory=dict)
 
     @staticmethod
-    def _kind_for(servant: CivilServant) -> BureaucratAnimationKind:
+    def _kind_for(
+        servant: CivilServant,
+        active_recipient_id: str | None = None,
+    ) -> BureaucratAnimationKind:
+        if servant.id == active_recipient_id:
+            return BureaucratAnimationKind.IDLE
         return BureaucratAnimationKind.PERMIT if servant.served else BureaucratAnimationKind.IDLE
 
-    def update(self, servants: Iterable[CivilServant], elapsed_seconds: float) -> None:
-        """Synchronize active servants and advance each loop independently."""
+    def update(
+        self,
+        servants: Iterable[CivilServant],
+        elapsed_seconds: float,
+        *,
+        active_recipient_id: str | None = None,
+    ) -> None:
+        """Synchronize active servants and advance each loop independently.
+
+        The active recipient is idle even when that servant completed an earlier
+        step in the same wave, so the next target is visible before approach.
+        """
 
         if elapsed_seconds < 0:
             raise ValueError("elapsed time must not be negative")
@@ -115,7 +130,7 @@ class BureaucratAnimationManager:
         self.states = {servant_id: state for servant_id, state in self.states.items() if servant_id in active_ids}
 
         for servant in active_servants:
-            kind = self._kind_for(servant)
+            kind = self._kind_for(servant, active_recipient_id)
             state = self.states.get(servant.id)
             if state is None or state.kind is not kind:
                 self.states[servant.id] = BureaucratAnimationState(kind=kind)

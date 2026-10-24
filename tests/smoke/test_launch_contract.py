@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from game import config
+from game.audio import ApplicationMusicSession
 from game.config import VIEWPORT_HEIGHT, VIEWPORT_WIDTH
 from game.geometry import Rect, Vector2
 from game.zoom import logical_viewport
@@ -20,8 +21,10 @@ from game.bureaucracy import collect_initial_document, handover
 from presentation.ui_assets import (
     StaminaColor,
     game_over_rect,
+    fishing_meter_rect,
     interaction_button_rect,
     load_ui_assets,
+    split_fishing_meter,
     stamina_bar_rect,
 )
 
@@ -80,6 +83,59 @@ def test_renderer_applies_tiled_diagonal_transform_to_tile_gid() -> None:
 
 def test_application_configuration_has_a_real_viewport() -> None:
     assert Rect(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT).width > 0
+
+
+def test_soundtrack_configuration_uses_complete_existing_asset_and_loop_mode() -> None:
+    soundtrack = Path(config.SOUNDTRACK_ASSET_PATH)
+    assert soundtrack == Path("assets/Music/I'm Not a Big Fan of.m4a")
+    assert soundtrack.is_file()
+    assert Path(config.SOUNDTRACK_RUNTIME_FALLBACK_PATH).is_file()
+    assert config.SOUNDTRACK_LOOP_COUNT == -1
+
+
+def test_soundtrack_is_owned_by_application_boundary_not_gameplay_state() -> None:
+    state_source = Path("src/game/state.py").read_text(encoding="utf-8")
+    window_source = Path("src/presentation/window.py").read_text(encoding="utf-8")
+    assert "ApplicationMusicSession" not in state_source
+    assert window_source.count("ApplicationMusicSession()") == 1
+    assert "music_session.start()" in window_source
+    assert "music_session.shutdown()" in window_source
+
+
+def test_game_over_restart_preserves_the_single_soundtrack_session(monkeypatch) -> None:
+    calls: list[tuple] = []
+
+    class FakeMusic:
+        def load(self, path):
+            calls.append(("load", path))
+
+        def play(self, loops=0):
+            calls.append(("play", loops))
+
+        def stop(self):
+            calls.append(("stop",))
+
+    class FakeMixer:
+        music = FakeMusic()
+
+        @staticmethod
+        def get_init():
+            return True
+
+    monkeypatch.setattr("game.audio.pygame.mixer", FakeMixer)
+    session = ApplicationMusicSession()
+    session.start()
+    calls_before_restart = list(calls)
+
+    state = create_game_state()
+    exhausted = replace(state, game_over=True, stamina=StaminaState(current=0, game_over=True))
+    update_game_state(
+        exhausted,
+        InputState(mouse_clicked=True, mouse_position=Vector2(480, 370)),
+        0,
+    )
+
+    assert calls == calls_before_restart
 
 
 @pytest.mark.parametrize("zoom", [1.0, 1.5, 2.0])
@@ -236,6 +292,91 @@ def test_renderer_no_longer_contains_removed_world_overlay_labels() -> None:
     renderer_source = Path("src/presentation/renderer.py").read_text(encoding="utf-8")
     assert "FISHING POND" not in renderer_source
     assert "DOCUMENTS" not in renderer_source
+
+
+def test_renderer_does_not_draw_civil_servant_debug_labels() -> None:
+    renderer_source = Path("src/presentation/renderer.py").read_text(encoding="utf-8")
+    assert 'f"S{step_order}"' not in renderer_source
+    assert 'f"DEBUG' not in renderer_source
+    assert '"SERVED"' not in renderer_source
+    assert '"PENDING"' not in renderer_source
+
+
+def test_fishing_meter_asset_has_native_bar_and_icon_regions() -> None:
+    import pygame
+
+    pygame.display.init()
+    pygame.display.set_mode((1, 1))
+    try:
+        assets = load_ui_assets()
+        assert assets.fishing_bar.get_size() == (64, 448)
+        assert len(assets.fishing_icons) == 6
+        assert all(icon.get_size() == (64, 64) for icon in assets.fishing_icons)
+        assert fishing_meter_rect((960, 640)).size == (128, 448)
+        assert split_fishing_meter(pygame.Surface((128, 448), pygame.SRCALPHA))[0].get_size() == (64, 448)
+    finally:
+        pygame.display.quit()
+
+
+def test_fishing_meter_renders_modal_catching_and_outcome_states() -> None:
+    import pygame
+    from presentation.bureaucrat_animation import BureaucratAnimationManager, load_bureaucrat_frames
+    from presentation.character_animation import CharacterAnimator, load_character_frames
+    from presentation.renderer import render
+
+    pygame.display.init()
+    pygame.font.init()
+    pygame.display.set_mode((1, 1))
+    try:
+        state = create_game_state()
+        carrying, _ = collect_initial_document(state.workflow)
+        completed, _ = handover(carrying, "servant-1")
+        rest = replace(state, workflow=completed, player=state.player.at(_pond_position(state)))
+        waiting = update_game_state(rest, InputState(interact_pressed=True), 0)
+        bite = update_game_state(waiting, InputState(), 2.0)
+        catching = update_game_state(bite, InputState(interact_pressed=True), 0)
+        assets = load_ui_assets()
+        animations = BureaucratAnimationManager(load_bureaucrat_frames())
+        animations.update(catching.workflow.definition.servants, 0)
+        surface = pygame.Surface((VIEWPORT_WIDTH, VIEWPORT_HEIGHT))
+        render(surface, catching, CharacterAnimator(load_character_frames()), animations, assets)
+        meter = fishing_meter_rect(surface.get_size())
+        assert surface.get_at(meter.center)[:3] != config.WORLD_COLOR
+
+        outcome = replace(catching, fishing_feedback="success", fishing_feedback_elapsed=1.0)
+        render(surface, outcome, CharacterAnimator(load_character_frames()), animations, assets)
+    finally:
+        pygame.font.quit()
+        pygame.display.quit()
+
+
+def test_fishing_waiting_and_bite_icons_are_centered_inside_bar() -> None:
+    import pygame
+    from presentation.renderer import _draw_fishing_overlay
+    from game.state import UiSnapshot
+
+    pygame.display.init()
+    pygame.display.set_mode((1, 1))
+    try:
+        assets = load_ui_assets()
+        surface = pygame.Surface((960, 640), pygame.SRCALPHA)
+        surface.fill((1, 2, 3, 255))
+        snapshot = UiSnapshot(
+            title="test",
+            state_label="test",
+            control_hint="test",
+            fishing_meter_visible=True,
+            fishing_meter_phase="waiting_for_bite",
+            fishing_meter_icon="bait",
+        )
+        _draw_fishing_overlay(surface, snapshot, assets)
+        meter = fishing_meter_rect(surface.get_size())
+        bar_center = (meter.x + 32, meter.y + 224)
+        right_center = (meter.x + 96, meter.y + 224)
+        assert surface.get_at(bar_center)[:3] != (1, 2, 3)
+        assert surface.get_at(right_center)[:3] == (1, 2, 3)
+    finally:
+        pygame.display.quit()
 
 
 def test_game_over_banner_renders_centered_and_restart_state_remains_valid() -> None:

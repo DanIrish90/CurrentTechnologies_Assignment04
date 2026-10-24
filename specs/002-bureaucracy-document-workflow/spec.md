@@ -16,6 +16,15 @@
 - Q: Soll die nächste Welle nach erfolgreicher Bearbeitung aller Civil Servants automatisch starten oder erst nach einer ausdrücklichen Bestätigung des Spielers? → A: Automatischer Start 10 Sekunden nach dem Abschluss der aktuellen Welle.
 - Q: Woher soll der Spieler das jeweils benötigte initiale Dokument erhalten? → A: Eine zentrale Dokumentenstelle liefert das benötigte initiale Dokument.
 
+### Session 2026-10-24
+
+- Q: Soll die Anzahl der Beamten pro Tag/Welle bei 1 starten und bis maximal 4 ansteigen, sodass ab Tag 4 beziehungsweise 5 immer genau 4 Beamte aktiv sind? → A: A — Tag 1 hat 1 Beamten, Tag 2 hat 2, Tag 3 hat 3 und ab Tag 4 sind immer genau 4 Beamte aktiv.
+- Q: Ab Tag 5 soll der nächste Dokumentempfänger zufällig aus allen Beamten außer dem zuletzt bedienten Beamten ausgewählt werden? → A: A — Bei jeder Weitergabe wird zufällig aus den drei anderen Beamten gewählt; dadurch sind beispielsweise nach `1 → 2 → 3 → 4` die Beamten 1 bis 3 mögliche nächste Empfänger.
+- Q: Soll ein bereits bedienter Beamter wieder die Idle-Animation abspielen, sobald er ab Welle 5 als nächster Dokumentempfänger zufällig ausgewählt wurde? → A: Ja — ab dem Zeitpunkt, an dem er als nächstes Ziel feststeht, wechselt seine Animation zurück zu Idle, damit der Spieler ihn als neue Aufgabe erkennt.
+- Q: Soll der bei Civil Servants angezeigte Debug-Text vollständig aus der Spieleransicht entfernt werden? → A: Ja — sämtlicher Debug-Text bei Civil Servants wird restlos entfernt; ausdrücklich vorgesehene Gameplay-Anzeigen wie Dokumentanforderungen, Status und Feedback bleiben erlaubt.
+- Q: Soll auch der Text `PENDING` beziehungsweise `SERVED` direkt bei Civil Servants entfernt werden? → A: Ja — diese Statuswörter werden ebenfalls nicht angezeigt; der Status darf nur noch über visuelle Zustände und die übrige Gameplay-Oberfläche erkennbar sein.
+- Q: Soll der Status eines Civil Servant ausschließlich anhand seiner Animation erkennbar sein, ohne zusätzliche Formen, Umrandungen, Symbole oder andere Statusmarker? → A: Ja — die Animation ist die einzige visuelle Statusanzeige des Civil Servant.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Complete the First Bureaucratic Wave (Priority: P1)
@@ -45,7 +54,7 @@ As a player, I want the first handover in wave 2 to produce a permit needed by t
 
 **Acceptance Scenarios**:
 
-1. **Given** wave 1 is complete and wave 2 begins, **When** the wave is displayed, **Then** exactly two civil servants are present and each shows its current document requirement or pending status.
+1. **Given** wave 1 is complete and wave 2 begins, **When** the wave is displayed, **Then** exactly two civil servants are present at their assigned spawn points, with the active requirement shown through gameplay UI and each servant's workflow status shown exclusively through its animation.
 2. **Given** civil servant 1 in wave 2 requires the initial document, **When** the player serves civil servant 1 with that document, **Then** the document is consumed and a permit is issued to the player as the next active document.
 3. **Given** the player carries the permit issued by civil servant 1, **When** the player serves civil servant 2, **Then** the permit is accepted and civil servant 2 is marked served.
 4. **Given** only civil servant 1 has been served in wave 2, **When** the player attempts to end the wave, **Then** the wave remains active until civil servant 2 has also been served.
@@ -85,8 +94,9 @@ As a player, I want incorrect documents and premature handovers to be rejected w
 
 - **FR-001**: The game MUST represent each wave as a distinct, ordered bureaucratic challenge.
 - **FR-002**: Wave 1 MUST begin with exactly one civil servant and wave 2 MUST begin with exactly two civil servants.
-- **FR-003**: For wave N, the game MUST spawn N civil servants, beginning with one in wave 1 and adding one civil servant when the next wave starts.
-- **FR-004**: Every active civil servant MUST have a visible current request for a specific document or a visible served state.
+- **FR-003**: For wave N, the game MUST spawn `min(N, 4)` civil servants: one in wave 1, two in wave 2, three in wave 3, and exactly four from wave 4 onward.
+- **FR-003a**: Each of the four supported civil-servant identities MUST have a defined spawn point, and an active civil servant MUST remain at that identity's assigned spawn point for the entire wave.
+- **FR-004**: Every active civil servant MUST have a visible current request for a specific document; the Civil Servant's workflow status MUST be communicated exclusively through its animation and MUST NOT use status text, shapes, outlines, icons, or other additional status markers.
 - **FR-005**: The player MUST be able to obtain the currently required initial document from the single central document source.
 - **FR-006**: The player MUST be able to carry an active document and see which document is currently carried.
 - **FR-007**: A civil servant MUST accept a handover only when the carried document matches that civil servant's current request and the civil servant has not already been served.
@@ -96,6 +106,10 @@ As a player, I want incorrect documents and premature handovers to be rejected w
 - **FR-011**: In wave 2, civil servant 2 MUST accept the permit issued by civil servant 1, and the wave MUST NOT complete before that handover.
 - **FR-012**: A wave MUST end only after all of its civil servants are served in the required sequence.
 - **FR-012a**: After a wave ends, the game MUST show completion feedback and MUST automatically start the next wave 10 seconds after the final successful handover.
+- **FR-012b**: For wave 5 and every later wave, after each successful handover the next document MUST be assigned to a randomly selected civil servant from the three identities that were not the immediately previous recipient; the current recipient MUST NOT be selected again directly.
+- **FR-012c**: The existing document handover rules for waves 1 through 4 MUST remain unchanged; the random recipient rule MUST begin only with wave 5.
+- **FR-012d**: When a Civil Servant is selected as the next recipient for an additional document in wave 5 or later, that Civil Servant MUST switch back to the `IDLE` animation as soon as the next workflow step is assigned, even if the Civil Servant was served earlier in the same wave. The switch MUST occur before the player reaches or interacts with the Civil Servant.
+- **FR-012e**: The game MUST NOT render any debug, developer-only, `PENDING`, or `SERVED` text at or beside Civil Servants. The Civil Servant animation MUST be the only visual indicator of that servant's workflow status; no additional shape, outline, icon, marker, or status overlay may be used. Workflow feedback may identify served progress elsewhere in the gameplay UI.
 - **FR-013**: The game MUST reject missing, incorrect, or out-of-order documents without consuming the incorrect document or changing valid progress.
 - **FR-014**: The game MUST prevent duplicate service rewards and duplicate wave progress when a served civil servant is interacted with again.
 - **FR-015**: The game MUST provide feedback that identifies the requested document, successful handover, rejected handover, newly issued permit, served civil servants, and remaining wave requirements.
@@ -126,6 +140,8 @@ As a player, I want incorrect documents and premature handovers to be rejected w
 - **SC-005**: At least 9 out of 10 first-time testers can complete the wave 2 document-to-permit chain using only the on-screen requests and feedback.
 - **SC-006**: Every generated wave in the supported progression is validated as completable before activation, with zero test fixtures creating an unwinnable wave.
 - **SC-007**: In a 10-minute play session, all tested valid and invalid handovers preserve the existing movement and UI responsiveness without a crash or corrupted state.
+- **SC-008**: In test sessions for waves 1 through 6, the active civil-servant counts are exactly 1, 2, 3, 4, 4, and 4, and every active civil servant remains at its assigned spawn point throughout its wave.
+- **SC-009**: In at least 100 seeded wave-5-or-later handover selections, every selected recipient is one of the three civil servants other than the immediately previous recipient, and no direct recipient repetition occurs.
 
 ## Assumptions
 
@@ -134,6 +150,8 @@ As a player, I want incorrect documents and premature handovers to be rejected w
 - The player carries at most one active document at a time in this feature; collecting a replacement is blocked until the current document is delivered or otherwise resolved.
 - A successful handover occurs when the player is within the normal interaction range of the intended civil servant and explicitly presses the separate interaction action.
 - Wave 1 and wave 2 are the required playable scope of this feature; the structured wave/document model is designed to support later waves without defining every future document rule here.
+- The wave count determines the number of active civil servants as `min(wave number, 4)`; from wave 4 onward the same four civil-servant identities and their assigned spawn points are used.
+- Waves 1 through 4 retain the existing deterministic document handover flow. Starting with wave 5, each next recipient is independently selected from the three identities other than the immediately previous recipient; random selection is part of the gameplay rule and must be reproducible in tests through seeded randomness.
 - Wave 2 uses the explicitly defined chain: initial document to civil servant 1, permit from civil servant 1 to civil servant 2.
 - The 10-second transition timer begins immediately after the final successful handover and does not require an additional player confirmation.
 - Civil servants and document sources use placeholder visuals and text in this feature; final art, dialogue, audio, stamina costs, and persistence are outside scope.

@@ -8,8 +8,11 @@ import pygame
 from game import config
 from presentation.ui_assets import (
     StaminaColor,
+    fishing_meter_rect,
     load_ui_assets,
     split_worm_timer_frames,
+    split_fishing_meter,
+    stamina_bar_rect,
     stamina_fill_width,
 )
 
@@ -38,7 +41,6 @@ def test_worm_timer_frames_preserve_left_to_right_order(pygame_display) -> None:
         sheet.fill((index, 0, 0, 255), pygame.Rect(index * 64, 0, 64, 32))
 
     frames = split_worm_timer_frames(sheet)
-
     assert [frame.get_at((0, 0))[0] for frame in frames] == list(range(7))
 
 
@@ -59,6 +61,36 @@ def test_stamina_fill_width_is_clamped_to_inner_frame(ratio: float, expected: in
 @pytest.mark.parametrize("field", ["WAVE_REST_DURATION", "WORM_TIMER_FPS"])
 def test_worm_timer_configuration_requires_positive_timing(monkeypatch, field: str) -> None:
     monkeypatch.setattr(config, field, 0.0)
-
     with pytest.raises(ValueError, match="must be positive"):
         config.validate_worm_timer_configuration()
+
+
+def test_fishing_meter_sheet_splits_into_native_bar_and_six_icons(pygame_display) -> None:
+    assets = load_ui_assets()
+    assert assets.fishing_bar.get_size() == (64, 448)
+    assert len(assets.fishing_icons) == 6
+    assert all(icon.get_size() == (64, 64) for icon in assets.fishing_icons)
+
+
+def test_fishing_meter_layout_is_native_and_centered() -> None:
+    assert fishing_meter_rect((960, 640)) == pygame.Rect(416, 96, 128, 448)
+    assert fishing_meter_rect((800, 600)).size == (128, 448)
+
+
+def test_fishing_meter_split_rejects_wrong_dimensions(pygame_display) -> None:
+    with pytest.raises(ValueError):
+        split_fishing_meter(pygame.Surface((64, 448), pygame.SRCALPHA))
+
+
+@pytest.mark.parametrize("scale", [0.5, 1.0, 1.5])
+def test_stamina_bar_scale_changes_only_bar_rect(scale: float) -> None:
+    rect = stamina_bar_rect((960, 640), (config.UI_STAMINA_BAR_WIDTH, config.UI_STAMINA_BAR_HEIGHT), 16, scale)
+    assert rect.left == 16
+    assert rect.top == 16
+    assert rect.width == round(config.UI_STAMINA_BAR_WIDTH * scale)
+    assert rect.height == round(config.UI_STAMINA_BAR_HEIGHT * scale)
+
+
+def test_stamina_bar_scale_must_be_positive() -> None:
+    with pytest.raises(ValueError):
+        stamina_bar_rect((960, 640), (320, 64), 16, 0)

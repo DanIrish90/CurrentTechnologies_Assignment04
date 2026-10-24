@@ -71,9 +71,20 @@ A positioned participant derived from a workflow step.
 | `display_name` | string | Readable player-facing label such as `Civil Servant 1`. |
 | `position` | world position | Used by the presentation/world layer for interaction range. |
 | `step_order` | integer | Links the servant to its ordered workflow step. |
-| `served` | boolean | Mirrors the step's completion state in the UI snapshot. |
+| `served` | boolean | Mirrors the workflow step's completion state; it does not alone determine the presentation animation when this servant is selected again later. |
 
 The pure workflow does not determine physical collision; the existing world/movement layer determines whether the player is in interaction range.
+
+### `CivilServantPresentationState`
+
+Presentation-only state derived from the active workflow snapshot. It must not mutate workflow validity.
+
+| Field | Type | Rules |
+|---|---|---|
+| `animation_kind` | `IDLE` or completion animation | `IDLE` when the servant is the current unserved workflow recipient, including a servant whose earlier step is already served; otherwise use the completion animation for a served servant. |
+| `debug_text_visible` | boolean | Always false for Civil Servant debug/developer-only text. |
+
+When the next workflow step is assigned, the selected recipient's animation state resets to the first `IDLE` frame before the player reaches or interacts with that servant. The Civil Servant's workflow status is communicated exclusively through this animation state; `PENDING`, `SERVED`, and all other status text or markers beside the servant are forbidden. Current document requirements and workflow feedback may appear elsewhere in the gameplay UI.
 
 ### `WaveDefinition`
 
@@ -82,13 +93,15 @@ Immutable configuration for one wave.
 | Field | Type | Rules |
 |---|---|---|
 | `wave_number` | integer | Positive and unique in the supported definition set. |
-| `steps` | ordered sequence of `WorkflowStep` | Contains exactly `wave_number` steps for the supported escalation rule. |
-| `servants` | ordered sequence of `CivilServant` | Contains exactly `wave_number` unique servants. |
+| `steps` | ordered sequence of `WorkflowStep` | Contains exactly `wave_number` steps; recipients may repeat from wave 5 onward. |
+| `servants` | ordered sequence of `CivilServant` | Contains exactly `min(wave_number, 4)` unique servants at their fixed spawn points. |
 
 Validation:
 
 - Wave 1 has exactly one step: the central source provides `INITIAL_DOCUMENT` to Civil Servant 1; no replacement document is required.
 - Wave 2 has exactly two steps: Civil Servant 1 accepts `INITIAL_DOCUMENT` and issues `PERMIT`; Civil Servant 2 accepts that `PERMIT`.
+- Wave 3 and wave 4 preserve the ordered one-time recipient sequence through Civil Servants 3 and 4.
+- Wave N contains N steps but only `min(N, 4)` servant identities. From wave 5 onward, step 5 and every later step selects a recipient randomly from the three identities other than the immediately previous recipient. A seeded random source makes the generated sequence reproducible in tests.
 - Every step's required document is either supplied by the central source or issued by an earlier step.
 - All servant identifiers and step orders are unique and contiguous.
 - The final step does not issue an unresolved requirement for the current wave.
@@ -150,11 +163,15 @@ Wave 2:
 
 ## Invariants
 
-- The active wave contains exactly N unique Civil Servants for wave N.
+- The active wave contains exactly `min(N, 4)` unique Civil Servants for wave N, and each servant remains associated with its authored spawn point.
+- The active workflow contains exactly N ordered handover steps for wave N.
 - Only the first unserved workflow step can be served.
+- A later workflow step may target a servant that was already served; it still represents a new document handover.
 - A document mismatch, missing document, duplicate handover, or out-of-order attempt leaves `carried_document`, served states, and wave number unchanged.
 - A successful handover consumes its input document exactly once.
 - A permit is issued exactly once by the successful wave 2 Civil Servant 1 handover.
 - A wave completes only when all steps are served.
 - The next wave starts exactly 10 elapsed seconds after final-handover completion feedback begins.
 - No active workflow can be created from an invalid or unsolvable definition.
+- Presentation animation state is derived from the current workflow recipient and may reset independently of the workflow `served` flags.
+- Civil Servant debug/developer-only text and status markers are never part of the rendered presentation; animation is the sole Civil Servant status indicator.

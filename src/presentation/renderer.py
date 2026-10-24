@@ -17,6 +17,7 @@ from .ui_assets import (
     StaminaColor,
     UiAssets,
     game_over_rect,
+    fishing_meter_rect,
     interaction_button_rect,
     load_ui_assets,
     stamina_bar_rect,
@@ -190,7 +191,6 @@ def render(
 
     actor_draws: list[tuple[float, object]] = []
     if state.workflow is not None:
-        servant_font = pygame.font.Font(None, 18)
         for servant in state.workflow.definition.servants:
             servant_bounds = Rect(
                 servant.position.x - config.SERVANT_PRESENTATION_WIDTH / 2,
@@ -200,33 +200,37 @@ def render(
             )
             servant_rect = _screen_rect(servant_bounds, camera)
             frame = bureaucrat_animation.frame_for(servant.id)
-            status = "SERVED" if servant.served else "PENDING"
-            actor_draws.append((servant.position.y, ("npc", frame, servant_rect, servant_font, servant.step_order, status)))
+            actor_draws.append((servant.position.y, ("npc", frame, servant_rect)))
 
     player_rect = _screen_rect(state.player.bounds, camera)
     actor_draws.append((state.player.bounds.bottom, ("player", character_animation.current_frame, player_rect)))
     for actor in actor_draw_order(actor_draws):
         if actor[0] == "npc":
-            _, frame, servant_rect, servant_font, step_order, status = actor
+            _, frame, servant_rect = actor
             screen.blit(frame, bureaucrat_sprite_rect(frame, servant_rect))
-            screen.blit(servant_font.render(f"S{step_order}", True, config.UI_TEXT_COLOR), servant_rect.move(16, 8))
-            screen.blit(servant_font.render(status, True, config.UI_TEXT_COLOR), servant_rect.move(3, 38))
         else:
             _, frame, actor_rect = actor
             screen.blit(frame, character_sprite_rect(frame, actor_rect))
     _draw_map(screen, state, camera, foreground=True)
     snapshot = ui_snapshot(state)
     assets = ui_assets or load_ui_assets()
+    if snapshot.fishing_meter_visible and screen.get_width() >= config.UI_FISHING_METER_WIDTH and screen.get_height() >= config.UI_FISHING_METER_HEIGHT:
+        _draw_fishing_overlay(screen, snapshot, assets)
     _draw_ui(screen, snapshot, assets)
-    if snapshot.fishing_visible:
-        _draw_fishing_overlay(screen, snapshot)
     if snapshot.rest_countdown_visible:
         _draw_worm_timer(screen, snapshot, assets)
 
 
+def draw_native_fishing_overlay(screen: pygame.Surface, snapshot: UiSnapshot, assets: UiAssets) -> None:
+    """Draw FishingMeter at native window pixels after logical-surface scaling."""
+
+    if snapshot.fishing_meter_visible:
+        _draw_fishing_overlay(screen, snapshot, assets)
+
+
 def _draw_ui(screen: pygame.Surface, snapshot: UiSnapshot, assets: UiAssets) -> None:
     _draw_stamina_bar(screen, snapshot, assets)
-    if snapshot.interaction_available and not snapshot.game_over:
+    if snapshot.interaction_available and not snapshot.game_over and not snapshot.fishing_meter_visible:
         button_rect = interaction_button_rect(
             screen.get_size(), assets.interaction_button.get_size(), config.UI_INTERACTION_BUTTON_SAFE_MARGIN
         )
@@ -280,35 +284,54 @@ def _draw_restart_button(screen: pygame.Surface, snapshot: UiSnapshot) -> None:
         screen.blit(label, label.get_rect(center=button.center))
 
 
-def _draw_fishing_overlay(screen: pygame.Surface, snapshot: UiSnapshot) -> None:
-    """Draw the placeholder catch game without mutating game state."""
+def _draw_fishing_overlay(screen: pygame.Surface, snapshot: UiSnapshot, assets: UiAssets) -> None:
+    """Compose the native FishingMeter sheet without mutating game state."""
 
-    font = pygame.font.Font(None, 24)
-    small_font = pygame.font.Font(None, 20)
-    play = pygame.Rect(610, 180, config.FISHING_BAR_WIDTH, config.FISHING_BAR_HEIGHT)
-    pygame.draw.rect(screen, config.UI_PANEL_COLOR, play.inflate(24, 56))
-    pygame.draw.rect(screen, config.UI_TEXT_COLOR, play, width=2)
+    meter_rect = fishing_meter_rect(screen.get_size())
+    screen.blit(assets.fishing_bar, meter_rect.topleft)
+    bar_rect = pygame.Rect(meter_rect.x, meter_rect.y, config.UI_FISHING_BAR_WIDTH, config.UI_FISHING_METER_HEIGHT)
 
-    def y_for(position: float) -> int:
-        return round(play.bottom - (position / config.FISH_PLAY_HEIGHT) * play.height)
+    if snapshot.fishing_meter_phase in {"catching", "success", "failure"}:
+        def y_for(position: float) -> int:
+            return round(bar_rect.bottom - (position / config.FISH_PLAY_HEIGHT) * bar_rect.height)
 
-    fish_y = y_for(snapshot.fish_position)
-    fish_rect = pygame.Rect(play.x - 8, fish_y - 5, play.width + 16, 10)
-    catch_bottom = y_for(snapshot.catch_bar_position)
-    catch_top = y_for(snapshot.catch_bar_position + snapshot.catch_bar_height)
-    catch_rect = pygame.Rect(play.x - 5, catch_top, play.width + 10, max(4, catch_bottom - catch_top))
-    pygame.draw.rect(screen, config.STAMINA_BAR_COLOR, catch_rect)
-    pygame.draw.rect(screen, config.UI_TEXT_COLOR, catch_rect, width=2)
-    pygame.draw.rect(screen, config.FEEDBACK_SUCCESS_COLOR, fish_rect)
-    screen.blit(font.render("FISH", True, config.UI_TEXT_COLOR), (play.x - 8, play.y - 34))
-    screen.blit(small_font.render("Press E to pull", True, config.UI_TEXT_COLOR), (play.x - 52, play.bottom + 12))
+        catch_bottom = y_for(snapshot.catch_bar_position)
+        catch_top = y_for(snapshot.catch_bar_position + snapshot.catch_bar_height)
+        catch_rect = pygame.Rect(
+            bar_rect.x,
+            catch_top,
+            bar_rect.width,
+            max(1, catch_bottom - catch_top),
+        ).clip(bar_rect)
+        catch_overlay = pygame.transform.scale(assets.fishing_icons[4], catch_rect.size)
+        screen.blit(catch_overlay, catch_rect.topleft)
 
-    progress = pygame.Rect(700, 220, 220, 18)
-    pygame.draw.rect(screen, config.STAMINA_BAR_BACKGROUND_COLOR, progress)
-    filled = pygame.Rect(progress.x, progress.y, round(progress.width * snapshot.fishing_progress / 100), progress.height)
-    pygame.draw.rect(screen, config.FEEDBACK_SUCCESS_COLOR, filled)
-    pygame.draw.rect(screen, config.UI_TEXT_COLOR, progress, width=2)
-    screen.blit(small_font.render(f"FISHING PROGRESS {snapshot.fishing_progress:.0f}%", True, config.UI_TEXT_COLOR), (700, 190))
+        if snapshot.fishing_meter_phase == "catching":
+            fish_y = y_for(snapshot.fish_position) - config.UI_FISHING_ICON_SIZE // 2
+            fish_rect = pygame.Rect(
+                bar_rect.centerx - config.UI_FISHING_ICON_SIZE // 2,
+                fish_y,
+                config.UI_FISHING_ICON_SIZE,
+                config.UI_FISHING_ICON_SIZE,
+            ).clip(bar_rect)
+            if fish_rect.width > 0 and fish_rect.height > 0:
+                fish_icon = assets.fishing_icons[2]
+                source = fish_icon.subsurface(
+                    (fish_rect.x - (bar_rect.centerx - config.UI_FISHING_ICON_SIZE // 2),
+                     fish_rect.y - fish_y,
+                     fish_rect.width,
+                     fish_rect.height)
+                )
+                screen.blit(source, fish_rect.topleft)
+
+    if snapshot.fishing_meter_phase in {"waiting_for_bite", "bite_window"}:
+        icon_index = 0 if snapshot.fishing_meter_phase == "waiting_for_bite" else 1
+        icon = assets.fishing_icons[icon_index]
+        screen.blit(icon, icon.get_rect(center=bar_rect.center))
+    elif snapshot.fishing_meter_phase in {"success", "failure"}:
+        icon_index = 3 if snapshot.fishing_meter_phase == "success" else 5
+        icon = assets.fishing_icons[icon_index]
+        screen.blit(icon, icon.get_rect(center=bar_rect.center))
 
 
 def _draw_worm_timer(

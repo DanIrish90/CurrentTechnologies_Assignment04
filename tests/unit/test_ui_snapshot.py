@@ -189,3 +189,27 @@ def test_ui_snapshot_matches_fishing_action_phases_and_blocked_states() -> None:
         stamina=StaminaState(current=0, game_over=True),
     )
     assert not ui_snapshot(exhausted).interaction_available
+
+
+def test_ui_snapshot_maps_fishing_phases_to_fishing_meter_icons() -> None:
+    state = _rest_state(create_game_state())
+    pond = replace(state, player=state.player.at(_pond_position(state)))
+
+    waiting = update_game_state(pond, InputState(interact_pressed=True), 0)
+    assert ui_snapshot(waiting).fishing_meter_icon == "bait"
+
+    bite = update_game_state(waiting, InputState(), 2.0)
+    assert ui_snapshot(bite).fishing_meter_icon == "bite"
+
+    catching = update_game_state(bite, InputState(interact_pressed=True), 0)
+    catching_snapshot = ui_snapshot(catching)
+    assert catching_snapshot.fishing_meter_icon == "fish"
+    assert catching_snapshot.fishing_meter_phase == "catching"
+
+
+def test_ui_snapshot_exposes_two_second_fishing_outcome_feedback() -> None:
+    state = replace(_rest_state(create_game_state()), fishing_feedback="success", fishing_feedback_elapsed=1.5)
+    snapshot = ui_snapshot(state)
+    assert snapshot.fishing_meter_visible
+    assert snapshot.fishing_meter_phase == "success"
+    assert snapshot.fishing_outcome_elapsed == 1.5

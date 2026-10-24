@@ -5,6 +5,8 @@ from game.bureaucracy import (
     HandoverReason,
     WorkflowPhase,
     collect_initial_document,
+    create_wave,
+    create_wave_progress,
     handover,
 )
 
@@ -56,3 +58,17 @@ def test_wave_two_rejects_permit_back_to_already_served_servant(wave_two_progres
     assert not result.accepted
     assert result.reason is HandoverReason.ALREADY_SERVED
     assert unchanged.carried_document == after_first.carried_document
+
+
+def test_wave_five_can_continue_after_all_four_servants_are_served() -> None:
+    progress = create_wave_progress(create_wave(5, random_seed=3))
+    progress, _ = collect_initial_document(progress)
+
+    for step in progress.definition.steps:
+        progress, result = handover(progress, step.servant_id)
+        if not result.wave_completed:
+            assert progress.carried_document is not None
+
+    assert result.wave_completed
+    assert len(progress.definition.servants) == 4
+    assert len(progress.definition.steps) == 5

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from enum import Enum
+import random
 from typing import Callable
 
 from . import config
@@ -112,8 +113,9 @@ def validate_wave(wave: WaveDefinition) -> None:
 
     if wave.wave_number <= 0:
         raise ValueError("wave number must be positive")
-    if len(wave.steps) != wave.wave_number or len(wave.servants) != wave.wave_number:
-        raise ValueError("wave must contain exactly N steps and servants")
+    expected_servants = min(wave.wave_number, config.MAX_CIVIL_SERVANTS)
+    if len(wave.steps) != wave.wave_number or len(wave.servants) != expected_servants:
+        raise ValueError("wave must contain exactly N steps and min(N, four) servants")
     servant_ids = [servant.id for servant in wave.servants]
     if len(servant_ids) != len(set(servant_ids)):
         raise ValueError("servant identifiers must be unique")
@@ -121,8 +123,8 @@ def validate_wave(wave: WaveDefinition) -> None:
     if orders != list(range(1, wave.wave_number + 1)):
         raise ValueError("workflow step orders must be contiguous")
     step_ids = [step.servant_id for step in wave.steps]
-    if set(step_ids) != set(servant_ids):
-        raise ValueError("every workflow step must identify one wave servant")
+    if not set(step_ids).issubset(set(servant_ids)):
+        raise ValueError("every workflow step must identify an active wave servant")
     for index, step in enumerate(wave.steps):
         if index == 0 and step.required_source is not SourceKind.CENTRAL_SOURCE:
             raise ValueError("the first workflow step must use the central source")
@@ -136,17 +138,29 @@ def validate_wave(wave: WaveDefinition) -> None:
         raise ValueError("the final workflow step must not issue an unresolved document")
 
 
-def create_wave(wave_number: int, positions: tuple[Vector2, ...] | None = None) -> WaveDefinition:
-    """Create a deterministic, solvable wave with N ordered servants."""
+def create_wave(
+    wave_number: int,
+    positions: tuple[Vector2, ...] | None = None,
+    *,
+    random_seed: int | None = None,
+    rng: random.Random | None = None,
+) -> WaveDefinition:
+    """Create a solvable wave with N handovers and at most four servants.
+
+    The first four recipients remain ordered. Later recipients are selected from
+    the three identities other than the previous recipient. Supplying a seed or
+    RNG makes the random continuation reproducible for tests.
+    """
 
     if wave_number <= 0:
         raise ValueError("wave number must be positive")
+    servant_count = min(wave_number, config.MAX_CIVIL_SERVANTS)
     servant_positions = positions or tuple(
         Vector2(850 + index * 220, 170 + (index % 2) * 220)
-        for index in range(wave_number)
+        for index in range(servant_count)
     )
-    if len(servant_positions) != wave_number:
-        raise ValueError("one position is required for each wave servant")
+    if len(servant_positions) != servant_count:
+        raise ValueError("one position is required for each active wave servant")
     servants = tuple(
         CivilServant(
             id=f"servant-{index + 1}",
@@ -156,10 +170,20 @@ def create_wave(wave_number: int, positions: tuple[Vector2, ...] | None = None) 
         )
         for index, position in enumerate(servant_positions)
     )
+    servant_ids = tuple(servant.id for servant in servants)
+    generator = rng or random.Random(random_seed)
+    recipients: list[str] = []
+    for index in range(wave_number):
+        if index < servant_count:
+            recipient = servant_ids[index]
+        else:
+            candidates = [servant_id for servant_id in servant_ids if servant_id != recipients[-1]]
+            recipient = generator.choice(candidates)
+        recipients.append(recipient)
     steps = tuple(
         WorkflowStep(
             order=index + 1,
-            servant_id=f"servant-{index + 1}",
+            servant_id=recipients[index],
             required_document_type=(
                 DocumentType.INITIAL_DOCUMENT if index == 0 else DocumentType.PERMIT
             ),
@@ -240,13 +264,13 @@ def handover(progress: WaveProgress, servant_id: str) -> tuple[WaveProgress, Han
         return _result(progress, HandoverReason.INACTIVE, "This wave is not accepting handovers.")
     if progress.carried_document is None:
         return _result(progress, HandoverReason.NO_DOCUMENT, "You need a document before serving anyone.")
-    servant = next((servant for servant in progress.definition.servants if servant.id == servant_id), None)
-    if servant is not None and servant.served:
-        return _result(progress, HandoverReason.ALREADY_SERVED, f"{servant.display_name} is already served.")
     step = progress.current_step
     if step is None:
         return _result(progress, HandoverReason.INACTIVE, "This wave is already complete.")
     if servant_id != step.servant_id:
+        servant = next((servant for servant in progress.definition.servants if servant.id == servant_id), None)
+        if servant is not None and servant.served:
+            return _result(progress, HandoverReason.ALREADY_SERVED, f"{servant.display_name} is already served.")
         return _result(progress, HandoverReason.OUT_OF_ORDER, f"Serve {step.servant_id} next.")
     document = progress.carried_document
     if (

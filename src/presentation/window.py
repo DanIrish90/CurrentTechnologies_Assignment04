@@ -6,19 +6,22 @@ import pygame
 from dataclasses import replace
 
 from game import config
+from game.audio import ApplicationMusicSession
 from game.geometry import Vector2
 from game.input_state import InputState, input_from_events
-from game.state import create_game_state, update_game_state
+from game.state import create_game_state, ui_snapshot, update_game_state
 from game.zoom import logical_viewport
 
 from .bureaucrat_animation import BureaucratAnimationManager, load_bureaucrat_frames
 from .character_animation import CharacterAnimator, load_character_frames
-from .renderer import render
+from .renderer import draw_native_fishing_overlay, render
 from .ui_assets import load_ui_assets
 
 
 def run() -> None:
     pygame.init()
+    music_session = ApplicationMusicSession()
+    music_session.start()
     screen = pygame.display.set_mode((config.WINDOW_WIDTH, config.WINDOW_HEIGHT), pygame.RESIZABLE)
     pygame.display.set_caption("I am from the Government")
     clock = pygame.time.Clock()
@@ -56,11 +59,22 @@ def run() -> None:
                 elapsed_seconds,
             )
             servants = state.workflow.definition.servants if state.workflow is not None else ()
-            bureaucrat_animation.update(servants, elapsed_seconds)
+            active_recipient_id = (
+                state.workflow.current_step.servant_id
+                if state.workflow is not None and state.workflow.current_step is not None
+                else None
+            )
+            bureaucrat_animation.update(
+                servants,
+                elapsed_seconds,
+                active_recipient_id=active_recipient_id,
+            )
             input_state = input_state.clear_interaction()
             input_state = input_state.clear_mouse_click()
             render(render_surface, state, character_animation, bureaucrat_animation, ui_assets)
             pygame.transform.scale(render_surface, screen.get_size(), screen)
+            draw_native_fishing_overlay(screen, ui_snapshot(state), ui_assets)
             pygame.display.flip()
     finally:
+        music_session.shutdown()
         pygame.quit()

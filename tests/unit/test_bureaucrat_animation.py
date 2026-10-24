@@ -74,6 +74,18 @@ def test_already_served_servant_starts_in_permit_animation() -> None:
     assert manager.frame_for("servant-1") is manager.frames.rows[1][0]
 
 
+def test_previously_served_next_recipient_returns_to_idle_before_interaction() -> None:
+    manager = BureaucratAnimationManager(load_bureaucrat_frames())
+    previously_served = servant("servant-1", served=True)
+
+    manager.update((previously_served,), 1 / 3)
+    manager.update((previously_served,), 0, active_recipient_id="servant-1")
+
+    assert manager.states["servant-1"].kind is BureaucratAnimationKind.IDLE
+    assert manager.states["servant-1"].frame_index == 0
+    assert manager.frame_for("servant-1") is manager.frames.rows[0][0]
+
+
 def test_servant_animation_states_are_independent_and_pruned() -> None:
     manager = BureaucratAnimationManager(load_bureaucrat_frames())
     first = servant("servant-1")

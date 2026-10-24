@@ -75,3 +75,25 @@ Record:
 - manual confirmation of readable requests, carried-document status, rejection reasons, completion feedback, and preserved movement/camera behavior.
 
 Implementation validation record: 47 pytest tests passed on 2026-10-13. A headless Pygame run processed resize, explicit interaction, focus-loss, and close events without error; visual confirmation should still be performed on a desktop display.
+
+Latest automated validation: 240 pytest tests passed after implementing the repeated-recipient animation and Civil Servant debug-text removal. Manual desktop visual confirmation remains required for the final presentation check.
+
+## 7. Four-servant cap and random continuation
+
+1. Create waves 1 through 6 with a fixed set of four authored spawn positions.
+2. Confirm the servant counts are `1, 2, 3, 4, 4, 4` while the handover-step counts are `1, 2, 3, 4, 5, 6`.
+3. In wave 5, complete the first four handovers in the existing order `servant-1 → servant-2 → servant-3 → servant-4`.
+4. Confirm the fifth document is assigned to one of servants 1–3 and never directly to servant 4.
+5. Repeat wave 5 with a fixed random seed and confirm the recipient sequence is identical; use a different seed and confirm a valid alternative sequence can be produced.
+
+Expected result: no wave creates more than four servants, all servants stay at their assigned spawn points, and every random continuation excludes only the immediately previous recipient.
+
+## 8. Repeated-recipient animation and presentation cleanup
+
+1. Start a seeded wave 5 or later and complete the first four handovers.
+2. Note the randomly selected next recipient and verify that the recipient's animation is `IDLE` immediately after the handover assigns the next step, even if that servant was already served earlier in the wave.
+3. Confirm the recipient remains in the idle animation while the player approaches and before the next interaction.
+4. Inspect the rendered Civil Servants and confirm no debug or developer-only text is displayed beside them.
+5. Confirm the current document requirement and general workflow feedback remain readable, while no status text, status marker, or separate served-state indicator appears beside the Civil Servant.
+
+Expected result: the next recipient is visually identifiable before approach, and Civil Servant workflow status is communicated only through animation in every supported runtime presentation.

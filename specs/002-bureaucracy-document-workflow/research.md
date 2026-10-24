@@ -66,3 +66,36 @@ The existing project already provides a pure movement state, a Pygame-ce window 
 - Existing `InputState` needs one explicit interaction action while retaining all current movement behavior.
 - Existing renderer should receive a workflow snapshot and draw civil servants, the central document source, carried document, and textual feedback using placeholder shapes.
 - No storage, network, account, audio, or external API integration is required.
+
+## Decision 6: Cap servants while continuing wave-length escalation
+
+**Decision**: Create `min(wave_number, 4)` civil servants at four fixed authored spawn points, but create exactly `wave_number` document steps. Waves 1–4 use the existing ordered identities. Starting with wave 5, each step after the first four selects one of the three identities other than the previous recipient; the selection uses a seeded random source.
+
+**Rationale**: This preserves the existing escalation in the number of required handovers while preventing the world from filling with more than four officials. It also matches the specified example `1 → 2 → 3 → 4 → 1–3`.
+
+**Alternatives considered**:
+
+- End the wave after every servant has been served once: rejected because it would make the requested post-fourth handover impossible.
+- Spawn a new servant for every additional document: rejected because the feature explicitly caps the active servants at four.
+
+## Decision 7: Separate workflow completion from recipient animation state
+
+**Decision**: Keep `CivilServant.served` as the workflow completion flag, but derive presentation animation from both the served state and the current active workflow step. When a previously served servant becomes the next recipient in wave 5 or later, reset that servant's animation to `IDLE` immediately when the next step is assigned, before the player reaches the servant.
+
+**Rationale**: A repeated recipient represents a new actionable document request even though the servant has already completed an earlier step. Reusing `served` alone would incorrectly leave the servant in its completion animation and make the next target unclear.
+
+**Alternatives considered**:
+
+- Reset animation only when the player enters interaction range: rejected because the player needs to identify the next target while navigating toward it.
+- Clear the servant's workflow `served` flag: rejected because it would corrupt the distinction between completed steps and the current repeated requirement.
+
+## Decision 8: Remove developer-only Civil Servant text
+
+**Decision**: Remove all debug/developer-only text drawn at or beside Civil Servants. Do not render `PENDING`, `SERVED`, or any other status marker beside the servant; the servant's animation is the sole visual indicator of workflow status. Unrelated workflow feedback may remain in the general gameplay UI.
+
+**Rationale**: Debug labels expose implementation details and compete with the readable player-facing bureaucracy UI. The rule is presentation-only and does not alter workflow state or validation.
+
+**Alternatives considered**:
+
+- Hide debug text only in release mode: rejected because the playable presentation must be clean in every supported runtime.
+- Replace debug text with more debug text or status markers: rejected because the clarification requires the animation to be the sole Civil Servant status indicator.

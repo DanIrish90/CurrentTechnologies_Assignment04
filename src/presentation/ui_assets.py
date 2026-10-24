@@ -30,6 +30,8 @@ class UiAssets:
     stamina_frame: pygame.Surface
     stamina_fill: pygame.Surface
     game_over: pygame.Surface
+    fishing_bar: pygame.Surface
+    fishing_icons: tuple[pygame.Surface, ...]
     worm_timer_frames: tuple[pygame.Surface, ...]
 
     def colorized_stamina_fill(self, color: StaminaColor) -> pygame.Surface:
@@ -67,11 +69,31 @@ def split_worm_timer_frames(surface: pygame.Surface) -> tuple[pygame.Surface, ..
     )
 
 
+def split_fishing_meter(surface: pygame.Surface) -> tuple[pygame.Surface, tuple[pygame.Surface, ...]]:
+    expected_size = (config.UI_FISHING_METER_WIDTH, config.UI_FISHING_METER_HEIGHT)
+    if surface.get_size() != expected_size:
+        raise ValueError(f"FishingMeter sheet must be {expected_size[0]}x{expected_size[1]}")
+    bar = surface.subsurface((0, 0, config.UI_FISHING_BAR_WIDTH, config.UI_FISHING_METER_HEIGHT)).copy()
+    icons = tuple(
+        surface.subsurface(
+            (
+                config.UI_FISHING_BAR_WIDTH,
+                index * config.UI_FISHING_ICON_SIZE,
+                config.UI_FISHING_ICON_SIZE,
+                config.UI_FISHING_ICON_SIZE,
+            )
+        ).copy()
+        for index in range(config.UI_FISHING_ICON_COUNT)
+    )
+    return bar, icons
+
+
 @lru_cache(maxsize=1)
 def load_ui_assets() -> UiAssets:
     """Load and split the fixed UserInterface art once per process."""
 
     config.validate_worm_timer_configuration()
+    config.validate_ui_configuration()
     stamina = _load(config.UI_STAMINA_BAR_ASSET_PATH, (config.UI_STAMINA_BAR_WIDTH, config.UI_STAMINA_BAR_HEIGHT))
     worm_timer = _load(
         config.WORM_TIMER_ASSET_PATH,
@@ -80,11 +102,18 @@ def load_ui_assets() -> UiAssets:
             config.WORM_TIMER_FRAME_HEIGHT,
         ),
     )
+    fishing_meter = _load(
+        config.UI_FISHING_METER_ASSET_PATH,
+        (config.UI_FISHING_METER_WIDTH, config.UI_FISHING_METER_HEIGHT),
+    )
+    fishing_bar, fishing_icons = split_fishing_meter(fishing_meter)
     return UiAssets(
         interaction_button=_load(config.UI_INTERACTION_BUTTON_ASSET_PATH, (128, 128)),
         stamina_frame=stamina.subsurface((0, 0, config.UI_STAMINA_BAR_WIDTH, config.UI_STAMINA_FRAME_HEIGHT)).copy(),
         stamina_fill=stamina.subsurface((0, config.UI_STAMINA_FRAME_HEIGHT, config.UI_STAMINA_BAR_WIDTH, config.UI_STAMINA_FRAME_HEIGHT)).copy(),
         game_over=_load(config.UI_GAME_OVER_ASSET_PATH, (1024, 256)),
+        fishing_bar=fishing_bar,
+        fishing_icons=fishing_icons,
         worm_timer_frames=split_worm_timer_frames(worm_timer),
     )
 
@@ -166,4 +195,14 @@ def game_over_rect(
         (width - scaled_size[0]) // 2,
         (height - scaled_size[1]) // 2,
         *scaled_size,
+    )
+
+
+def fishing_meter_rect(surface_size: tuple[int, int]) -> pygame.Rect:
+    width, height = surface_size
+    return pygame.Rect(
+        max(0, (width - config.UI_FISHING_METER_WIDTH) // 2),
+        max(0, (height - config.UI_FISHING_METER_HEIGHT) // 2),
+        config.UI_FISHING_METER_WIDTH,
+        config.UI_FISHING_METER_HEIGHT,
     )

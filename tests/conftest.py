@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 import pygame
+from types import SimpleNamespace
 
 from game.geometry import Vector2
 from game.input_state import InputState
@@ -17,6 +18,31 @@ from game.bureaucracy import (
 )
 from game.stamina import StaminaState, create_initial_stamina
 from game.fishing import FishingState, create_fishing_state
+
+
+@pytest.fixture
+def fake_music_mixer(monkeypatch):
+    """Provide a mixer-free music seam for application-session tests."""
+
+    calls: list[tuple] = []
+
+    class FakeMusic:
+        def load(self, path):
+            calls.append(("load", path))
+
+        def play(self, loops=0):
+            calls.append(("play", loops))
+
+        def stop(self):
+            calls.append(("stop",))
+
+    mixer = SimpleNamespace(
+        get_init=lambda: True,
+        init=lambda: calls.append(("init",)),
+        music=FakeMusic(),
+    )
+    monkeypatch.setattr("game.audio.pygame.mixer", mixer)
+    return calls
 
 
 @pytest.fixture

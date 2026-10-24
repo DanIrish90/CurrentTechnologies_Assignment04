@@ -10,6 +10,9 @@ The existing immutable UI snapshot gains derived presentation facts rather than 
 | stamina_ratio | number in `[0, 1]` | Current stamina divided by maximum, clamped to the inclusive range |
 | stamina_color_state | enum | `green` for `[0.5, 1.0]`, `yellow` for `[0.1, 0.5)`, `red` for `[0, 0.1)` |
 | game_over | boolean | Existing authoritative exhaustion state; controls GameOver asset visibility |
+| fishing_meter_phase | enum | Derived from `FishingPhase`: bait/default, bite, catching, outcome, or hidden |
+| fishing_meter_icon | enum or null | Explicit sprite-sheet icon selection: bait, bite, fish, success, catchbar overlay, or failure |
+| fishing_outcome_elapsed | number ≥ 0 | Simulation elapsed time for success/failure feedback; icon is visible through 2.0 seconds |
 
 The existing feedback, fishing, countdown, and restart fields remain available where their gameplay overlays are still needed. Removing the debug panel does not remove those state values from the model unless they become unused after implementation.
 
@@ -48,6 +51,21 @@ Source asset: `assets/UserInterface/StaminaBar.png`, 320×64 pixels.
 
 The fill is anchored to the left edge of the frame. Its visible width is the frame's inner width multiplied by `stamina_ratio`, clamped so it never exceeds the frame or becomes negative. The frame is drawn last to preserve its border. The complete bar is then sized by the positive `UI_STAMINA_BAR_SCALE` value, defaulting to `1.0`, before the logical surface is passed through Feature-010 zoom.
 
+## FishingMeter Composition
+
+Source asset: `assets/UserInterface/FishingMeter.png`, 128×448 pixels. The left 64×448 region is the vertical Fishing Bar. The six 64×64 regions on the right are selected by explicit source rectangle and composed over the bar as follows:
+
+| State | Icon | Placement |
+|-------|------|-----------|
+| Idle / waiting for bite | first icon, bait | vertically centered inside the left 64×448 bar |
+| Bite window | second icon | vertically centered inside the left 64×448 bar; prompts the E action |
+| Catching | third icon, fish | positioned at the existing `fish_position` inside the bar; replaces the old fish bar graphic |
+| Success feedback | fourth icon | centered over the catchbar overlay for 2 seconds |
+| Catchbar | fifth icon/overlay | represents the catchbar layer during catching and outcome composition |
+| Failure feedback | sixth icon | centered over the catchbar overlay for 2 seconds |
+
+The complete composition is exactly 128×448 pixels and centered in the visible surface. During idle/waiting and the bite window, the selected bait/bite icon is rendered inside the left bar at its vertical center; the right icon column is only a source region and is not displayed as an active icon column. The composition is not affected by Feature-010 UI zoom or `UI_STAMINA_BAR_SCALE`. Fishing movement and unrelated actions are paused while this composition is active.
+
 ## UI Asset Requirements
 
 | Asset | Source size | Presentation rule |
@@ -55,8 +73,9 @@ The fill is anchored to the left edge of the frame. Its visible width is the fra
 | `InteractionButton.png` | 128×128 | Horizontally centered in the lower screen third while `interaction_available` is true |
 | `StaminaBar.png` | 320×64 | Upper row frame over lower row fill; positioned top-left with safe margin and sized by the independent positive StaminaBar scale |
 | `GameOver.png` | 1024×256 | Centered while `game_over` is true, proportionally contained within the logical surface |
+| `FishingMeter.png` | 128×448 | Native-size centered composition with a 64×448 bar, phase-selected 64×64 icons, and existing fish position |
 
-All three assets are rendered on the Feature 010 logical surface and therefore inherit its configured zoom and final window scaling. Only the StaminaBar additionally uses its own config scale.
+The ordinary HUD assets are rendered on the Feature 010 logical surface and inherit its configured zoom and final window scaling. Only the StaminaBar additionally uses its own config scale. FishingMeter is the explicit exception and is rendered at native size in the visible surface coordinate system.
 
 ## Visibility Transitions
 

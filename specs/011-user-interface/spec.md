@@ -16,6 +16,14 @@
 - Q: Soll Stamina ausschließlich nach einem erfolgreichen Fischfang wiederhergestellt werden? → A: Ja. Das Betreten oder Verweilen im Fishing Pond, ein verpasster Biss und ein entkommener Fisch stellen keine Stamina wieder her; nur ein erfolgreich abgeschlossenes Catching-Minispiel gewährt die bestehende Stamina-Belohnung.
 - Q: Soll die StaminaBar einen eigenen konfigurierbaren Scale-Faktor erhalten? → A: Ja. Ein positiver Scale-Wert in der Config soll standardmäßig `1.0` betragen und ausschließlich die gerenderte Größe der StaminaBar verändern; der Faktor wird zusätzlich zum bestehenden Zoom angewendet und darf Gameplay oder andere UI-Elemente nicht verändern.
 
+### Session 2026-10-18
+
+- Q: Soll das Fishing-Mini-Game während des gesamten Ablaufs als zentraler UI-Overlay angezeigt werden und die Welt weiterhin sichtbar bleiben? → A: A — Das Fishing-Mini-Game wird modal als zentriertes Overlay über der sichtbaren Welt dargestellt; Bewegung und andere Aktionen sind währenddessen pausiert.
+- Q: Wie lange sollen Erfolgs- und Fehlschlag-Icon exakt angezeigt werden? → A: C — Beide Rückmeldungen werden jeweils 2 Sekunden framerate-unabhängig angezeigt.
+- Q: Soll `FishingMeter.png` mit dem bestehenden UI-Zoom skaliert werden oder immer in seiner nativen Assetgröße erscheinen? → A: B — Das vollständige `FishingMeter.png`-Sheet bleibt unabhängig vom UI-Zoom in seiner nativen Größe von 128×448 Pixeln; die linke Fishing-Bar darin ist 64×448 Pixel groß.
+- Q: Soll das dritte Icon den Fisch während des Catching-Zustands als bewegliches Element an der aktuellen Fischposition innerhalb der 64×448-Pixel-Bar darstellen? → A: A — Das Fisch-Icon ersetzt die bisherige Fischdarstellung und folgt der bestehenden Fischposition innerhalb der Bar.
+- Q: Sollen das Bait-Icon während der Wartephase und das Bite-Icon während des Bissfensters innerhalb der Fishing-Bar mittig dargestellt werden? → A: Ja — Beide Icons werden vertikal zentriert innerhalb der linken 64×448-Pixel-Fishing-Bar angezeigt und nicht rechts neben der Bar.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Klare Interaktionshinweise (Priority: P1)
@@ -101,6 +109,11 @@ Als Spieler möchte ich bei erschöpfter Ausdauer eine eindeutige GameOver-Grafi
 - **FR-017**: Die neue UI MUST den bestehenden Spielfluss, die Zustandsübergänge, den Ausdauerverbrauch, Fishing, Dokumentenworkflow und Neustartlogik unverändert lassen. Das umfasst ausdrücklich das Fishing-Mini-Game während der Wellenruhe mit Auswerfen, Bisswartezeit, Bissfenster, Catching-Minispiel und der bestehenden Stamina-Belohnung. Eine Stamina-Wiederherstellung MUST ausschließlich nach einem erfolgreichen Fang erfolgen; bloßes Verweilen im Fishing Pond, ein verpasster Biss oder ein entkommener Fisch dürfen keine Wiederherstellung auslösen.
 - **FR-018**: Die UI MUST bei kleinen und veränderten Fenstergrößen ohne Absturz, ungerenderte Flächen oder abgeschnittene zentrale Hinweise funktionieren.
 - **FR-019**: Die StaminaBar MUST einen eigenen positiven Scale-Faktor aus der zentralen Config verwenden, standardmäßig `1.0`; dieser Faktor MUST ausschließlich die gerenderte Größe der StaminaBar beeinflussen und zusätzlich zur bestehenden Feature-010-Zoomdarstellung angewendet werden.
+- **FR-020**: Das Fishing-Mini-Game MUST während seines gesamten Ablaufs als zentriertes Overlay über der sichtbaren Welt dargestellt werden. Während das Overlay aktiv ist, MUST die Spielerbewegung sowie alle nicht zum Fishing-Mini-Game gehörenden Aktionen pausiert sein; nach Erfolg, Fehlschlag oder Abbruch MUST der normale Spielfluss wiederaufgenommen werden.
+- **FR-021**: Das Erfolgs- beziehungsweise Fehlschlag-Icon MUST nach dem jeweiligen Ausgang des Fishing-Mini-Games jeweils 2 Sekunden lang framerate-unabhängig zentral über dem Catchbar-Overlay angezeigt werden; danach MUST der normale Fishing- beziehungsweise Spielfluss gemäß dem bestehenden Zustandsmodell fortgesetzt werden.
+- **FR-022**: `FishingMeter.png` MUST für das Fishing-Mini-Game in seiner nativen Gesamtgröße von 128×448 Pixeln gerendert werden; die linke Fishing-Bar darin MUST 64×448 Pixel groß sein. Das Sheet darf weder durch den bestehenden UI-Zoom noch durch den StaminaBar-Scale-Faktor verändert werden und MUST zentral innerhalb der sichtbaren Fläche positioniert werden.
+- **FR-023**: Im Catching-Zustand MUST das dritte 64×64-Icon als Fisch an der bestehenden Fischposition innerhalb der Fishing-Bar dargestellt werden und die bisherige balkenhafte Fischdarstellung vollständig ersetzen; die bestehende Catching-Logik und Positionsberechnung MUST unverändert bleiben.
+- **FR-024**: Während der Wartephase bis zum Biss und während des Bissfensters MUST das jeweils aktive Bait- beziehungsweise Bite-Icon vertikal zentriert innerhalb der linken 64×448-Pixel-Fishing-Bar dargestellt werden; diese Icons dürfen in diesen Zuständen nicht rechts neben der Bar erscheinen.
 
 ### Key Entities
 
@@ -121,6 +134,10 @@ Als Spieler möchte ich bei erschöpfter Ausdauer eine eindeutige GameOver-Grafi
 - **SC-006**: Alle bestehenden automatisierten Gameplay- und UI-Tests bleiben erfolgreich, und Dokumente, der vollständige Fishing-Ablauf inklusive bestehender Stamina-Wiederherstellung, Ausdauer, Wellenwechsel und Neustart funktionieren weiterhin.
 - **SC-007**: Die UI-Anpassung benötigt keine Änderung an Weltkoordinaten, Spawnpositionen oder Gameplay-Balancingwerten.
 - **SC-008**: Bei mindestens zwei positiven StaminaBar-Scale-Werten, darunter `0.5` und `1.5`, verändert sich die gerenderte Bar-Größe proportional, ohne dass Position, andere UI-Elemente, Weltkoordinaten oder Gameplay-Werte verändert werden.
+- **SC-009**: Nach einem erfolgreichen oder fehlgeschlagenen Fang bleibt das jeweils passende Rückmeldungs-Icon für genau 2 Sekunden mit einer Toleranz von höchstens einem Frame sichtbar und wird anschließend ausgeblendet.
+- **SC-010**: Bei mindestens zwei unterschiedlichen bestehenden UI-Zoomstufen bleibt `FishingMeter.png` jeweils 128×448 Pixel groß, inklusive der 64×448-Pixel-Bar und der rechten Icon-Spalte, und wird vollständig zentriert innerhalb der sichtbaren Fläche dargestellt.
+- **SC-011**: Während des Catching-Zustands folgt das dritte Icon in mindestens drei unterschiedlichen Fischpositionen der jeweils berechneten Fischposition, ohne dass die bisherige balkenhafte Fischdarstellung zusätzlich sichtbar ist.
+- **SC-012**: In der Wartephase und im Bissfenster liegt der Mittelpunkt des jeweils aktiven Bait- beziehungsweise Bite-Icons innerhalb der linken Fishing-Bar, mit einer vertikalen Abweichung von höchstens einem Pixel vom Mittelpunkt der Bar; rechts neben der Bar wird in diesen Zuständen kein aktives Icon gerendert.
 
 ## Assumptions
 
@@ -132,4 +149,9 @@ Als Spieler möchte ich bei erschöpfter Ausdauer eine eindeutige GameOver-Grafi
 - Für GameOver wird die Grafik proportional so angepasst, dass sie mit einem sicheren Rand vollständig in die aktuelle sichtbare Fläche passt.
 - Die bestehende Neustartfunktion bleibt erhalten; diese Feature-Spec ersetzt nur die visuelle Darstellung.
 - Der bestehende Fishing-Ablauf bleibt maßgeblich: Fishing ist während der Wellenruhe im Fishing Pond möglich, erfordert Auswerfen, Bisswartezeit, Reaktion im Bissfenster und das Catching-Minispiel; ausschließlich ein erfolgreicher Fang gewährt die bestehende Stamina-Belohnung, nicht das bloße Verweilen im Pond oder ein Fehlversuch.
-- Weitere vorhandene UI-Assets wie SpeechBubble oder FishingMeter sind nicht Teil dieser Änderung, sofern sie nicht bereits durch die bestehenden Fishing-Szenarien benötigt werden.
+- Das Fishing-Mini-Game bleibt während seines Ablaufs als zentriertes modales Overlay über der Welt sichtbar; Bewegung und andere Aktionen sind bis zum Abschluss oder Abbruch pausiert.
+- Erfolgs- und Fehlschlag-Rückmeldungen werden jeweils 2 Sekunden lang zentral über dem Catchbar-Overlay angezeigt.
+- `FishingMeter.png` wird unabhängig vom UI-Zoom und vom StaminaBar-Scale-Faktor in nativer Gesamtgröße 128×448 Pixeln gezeichnet; die linke Bar-Region bleibt 64×448 Pixel groß.
+- Im Catching-Zustand ersetzt das dritte Icon die bisherige balkenhafte Fischdarstellung und wird an der bestehenden Fischposition innerhalb der Bar bewegt.
+- Während der Wartephase und des Bissfensters werden Bait- und Bite-Icon innerhalb der Fishing-Bar zentriert angezeigt; die rechte Icon-Spalte dient nur als Quelle für die Sprite-Auswahl und bleibt als Darstellung leer.
+- Weitere vorhandene UI-Assets wie SpeechBubble sind nicht Teil dieser Änderung, sofern sie nicht bereits durch die bestehenden Fishing-Szenarien benötigt werden; `FishingMeter.png` ist ausdrücklich Bestandteil dieser Änderung.

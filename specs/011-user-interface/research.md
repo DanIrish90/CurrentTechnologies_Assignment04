@@ -24,7 +24,7 @@
 
 ## Decision 3: Load and split the supplied UI assets once
 
-**Decision**: Treat the three PNGs as source assets loaded at presentation initialization. Validate their expected dimensions, split `StaminaBar.png` into two 320×32 regions, and keep reusable surfaces in a small UI asset helper.
+**Decision**: Treat the supplied PNGs as source assets loaded at presentation initialization. Validate their expected dimensions, split `StaminaBar.png` into two 320×32 regions, and keep reusable surfaces in a small UI asset helper.
 
 **Rationale**: This preserves pixel-art edges, gives deterministic asset errors, and avoids image loading or slicing work in every frame.
 
@@ -100,3 +100,59 @@
 - Reuse the global zoom multiplier: rejected because it also changes unrelated UI and world presentation.
 - Scale the source PNG or alter the asset: rejected because the source art should remain replaceable and pixel-accurate.
 - Store the scale in mutable game state: rejected because this is a presentation configuration, not gameplay state.
+
+## Decision 10: Treat FishingMeter.png as a vertical bar plus six icon regions
+
+**Decision**: Validate `FishingMeter.png` as a 128×448 sheet. Use the left 64×448 region as the vertical Fishing Bar and select the six 64×64 regions on the right by explicit state index: bait/default, bite, catching fish, success, catchbar overlay, and failure.
+
+**Rationale**: Explicit source rectangles preserve the supplied art layout and prevent image-order assumptions from spreading through the renderer. The bar and icons can be composed deterministically at native size.
+
+**Alternatives considered**:
+
+- Recreate the meter with primitive rectangles and text: rejected because it discards the supplied visual asset.
+- Scale or crop the whole sheet as one image: rejected because the right-side icons must be independently selected and overlaid.
+
+## Decision 11: Keep FishingMeter native-size and centered
+
+**Decision**: Render the FishingMeter composition at exactly 128×448 pixels, centered in the visible surface, without Feature-010 UI zoom or the StaminaBar scale. The world remains visible behind it, while movement and unrelated actions are paused during active fishing.
+
+**Rationale**: The clarified requirement makes the FishingMeter a fixed-size gameplay instrument rather than ordinary HUD decoration. A modal overlay gives the E input and changing icon states a stable target.
+
+**Alternatives considered**:
+
+- Apply global UI zoom: rejected because the requirement explicitly preserves native dimensions.
+- Render a full-screen fishing view: rejected because the world should remain visible behind the centered mini-game.
+- Leave movement active: rejected because unrelated movement would make the modal interaction ambiguous.
+
+## Decision 12: Derive icon selection from FishingPhase and outcome feedback
+
+**Decision**: Use the existing FishingPhase as the authoritative state: idle/waiting uses the bait icon, BITE_WINDOW uses the bite icon, CATCHING uses the fish icon at the current fish position, and outcome feedback selects success or failure for exactly two elapsed seconds. The catchbar overlay remains visible as the fifth asset state during catching/outcome composition.
+
+**Rationale**: This preserves the existing deterministic fishing state machine while replacing only the placeholder renderer. The fish icon follows the existing `fish_position`; no parallel animation or gameplay state is introduced.
+
+**Alternatives considered**:
+
+- Add a second UI-owned fishing state machine: rejected because it can drift from gameplay outcomes.
+- Infer state from rendered text: rejected because text is presentation and not authoritative.
+
+## Decision 13: Keep outcome timing simulation-driven
+
+**Decision**: Store or derive outcome feedback elapsed time from the simulation clock and hide the success/failure icon after exactly two seconds, with no blocking sleep or frame-count timing.
+
+**Rationale**: Simulation-time timing is frame-rate independent and can be tested with deterministic elapsed-time steps.
+
+**Alternatives considered**:
+
+- Use a render-frame counter: rejected because display frame rate changes visible duration.
+- Block rendering for two seconds: rejected because it freezes the game loop and violates responsive input behavior.
+
+## Decision 14: Center bait and bite icons inside the Fishing Bar
+
+**Decision**: During waiting-for-bite and the bite window, render the selected bait or bite icon at the vertical center of the left 64×448 Fishing Bar. The right-side icon column remains a source region only and is not shown as an active display column.
+
+**Rationale**: The manual test confirmed that placing these states beside the bar is visually misleading. Centering them in the bar gives the player one stable focal area for the fishing interaction while retaining the supplied sprite sheet.
+
+**Alternatives considered**:
+
+- Keep bait and bite icons in the right column: rejected because the active state reads as detached from the Fishing Bar.
+- Add a separate text prompt: rejected because it duplicates the supplied visual feedback and weakens pixel-art consistency.

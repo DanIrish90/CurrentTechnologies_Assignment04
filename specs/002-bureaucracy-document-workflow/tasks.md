@@ -138,6 +138,8 @@ description: "Actionable implementation tasks for the bureaucratic document work
 - **Phase 4 US2**: Depends on US1's workflow state and interaction seams; adds the permit chain and timer.
 - **Phase 5 US3**: Depends on US1/US2 outcomes; hardens rejection and feedback behavior.
 - **Phase 6 Polish**: Depends on all desired stories being implemented.
+- **Phase 7 Four-Servant Cap**: Depends on the completed core workflow and extends wave generation through wave 6.
+- **Phase 8 Clarification Follow-up**: Depends on Phase 7; implements the clarified repeated-recipient animation and debug-text removal.
 
 ### User Story Dependencies
 
@@ -159,6 +161,10 @@ Foundation (T005-T008)
                           +--> US3: invalid workflows + feedback (T029-T037)
                                    |
                                    +--> Polish/regression (T038-T042)
+                                            |
+                                            +--> Four-servant cap/random continuation (T043-T050)
+                                                     |
+                                                     +--> Clarification follow-up (T051-T056)
 ```
 
 ### Parallel Opportunities
@@ -169,6 +175,7 @@ Foundation (T005-T008)
 - US2 tests T019–T023 can run in parallel; T024 and T027 can be developed independently after the data shape is agreed.
 - US3 tests T029–T032 can run in parallel; T033 and T035 touch the pure workflow module sequentially, while T034 and T036 can proceed once their interfaces are stable.
 - T038 and T039 can run in parallel; T040–T042 follow implementation completion.
+- T051 and T052 can run in parallel because they cover animation and rendering contracts in separate test files; T053 and T054 follow their respective tests, while T055 can proceed once the behavior wording is stable.
 
 ## Parallel Example: User Story 1
 
@@ -187,6 +194,15 @@ Track A: T019/T020 tests -> T024/T025 src/game/bureaucracy.py
 Track B: T021 tests/unit/test_wave_transition.py -> T026 state/timer integration
 Track C: T022 tests/unit/test_state.py -> T028 window/main integration
 Presentation: T027 src/presentation/renderer.py after workflow snapshot fields are stable
+```
+
+## Parallel Example: Clarification Follow-up
+
+```text
+Track A: T051 tests/unit/test_bureaucrat_animation.py -> T053 bureaucrat_animation.py/window.py
+Track B: T052 tests/smoke/test_launch_contract.py -> T054 presentation/renderer.py
+Track C: T055 quickstart.md/README.md after T053 and T054 behavior is settled
+Validation: T056 after T051-T055
 ```
 
 ## Parallel Example: User Story 3
@@ -212,11 +228,59 @@ Presentation: T036 renderer.py -> T037 window.py
 1. Add US2 and validate the exact wave 2 permit chain plus 10-second transition.
 2. Add US3 and validate all invalid-handover invariants and feedback.
 3. Run the full quickstart and pytest suite.
-4. Keep stamina, fishing, persistence, and future special bureaucrats outside this feature until separately specified.
+4. Apply the clarification follow-up for repeated-recipient animation and debug-text removal.
+5. Keep stamina, fishing, persistence, and future special bureaucrats outside this feature until separately specified.
 
 ### Completion Evidence
 
-- All 42 tasks are checked off.
+- T001-T050 document the completed core workflow and four-servant/random-continuation work.
+- T051-T055 are implemented and automated-validated; T056 remains open for manual desktop visual confirmation.
 - `./.venv/bin/python -m pytest` passes with feature 001 regressions covered.
 - `python main.py` launches the workflow-enabled game.
 - Wave 1, wave 2, invalid interaction, and 10-second transition scenarios pass.
+
+## Phase 7: Four-Servant Cap and Random Continuation
+
+**Purpose**: Extend the completed workflow so wave N requires N handovers while no wave creates more than four civil servants, and wave 5+ selects subsequent recipients randomly without immediate repetition.
+
+- [X] T043 [P] [US1] Add seeded wave-generation tests in `tests/unit/test_wave_generation.py` for servant counts `1, 2, 3, 4, 4, 4`, exactly N steps per wave, and four stable spawn identities.
+- [X] T044 [P] [US2] Add seeded random-continuation tests in `tests/unit/test_bureaucracy.py` for wave 5 sequences, including the required first four recipients and exclusion of the immediately previous recipient.
+- [X] T045 [P] [US2] Add wave-5-plus transition and integration tests in `tests/unit/test_wave_transition.py` and `tests/unit/test_state.py` proving the next wave uses only the four authored spawn points.
+- [X] T046 [US1] Update `src/game/bureaucracy.py` so validation accepts N steps with `min(N, 4)` unique servants, creates fixed-position servants, preserves the ordered route through wave 4, and generates seeded random recipients from wave 5 onward.
+- [X] T047 [US2] Update `src/game/state.py` so every generated wave selects the four-map spawn points by identity and never requests a fifth servant placement.
+- [X] T048 [US2] Update `src/game/config.py` with the four-servant cap and document the seeded-random workflow constants without changing existing movement or UI behavior.
+- [X] T049 [P] [US3] Update `specs/002-bureaucracy-document-workflow/quickstart.md` and `README.md` with the capped servant counts, N-handover rule, and random continuation behavior.
+- [X] T050 Run `./.venv/bin/python -m pytest`, then manually verify waves 1–6 and mark all completed tasks in `specs/002-bureaucracy-document-workflow/tasks.md`.
+
+## Phase 8: Clarification Follow-up — Animation and Debug Text
+
+**Purpose**: Implement the clarified presentation rules for repeated random recipients and remove developer-only text from Civil Servants while preserving approved gameplay feedback.
+
+**Prerequisite**: Phase 7 is documented as complete; these follow-up tasks remain open until the clarified behavior is implemented and validated.
+
+### Tests for Clarified Behavior
+
+- [X] T051 [P] [US2] Add animation regression coverage in `tests/unit/test_bureaucrat_animation.py` proving that a Civil Servant previously marked served switches to `BureaucratAnimationKind.IDLE` as soon as it becomes the next wave-5-or-later recipient, before any player interaction.
+- [X] T052 [P] [US3] Add a renderer contract test in `tests/smoke/test_launch_contract.py` or a dedicated `tests/unit/test_renderer.py` proving Civil Servant rendering contains no developer/debug-only text while retaining required gameplay information such as document requirements, served state, and workflow feedback.
+
+### Implementation for Clarified Behavior
+
+- [X] T053 [US2] Update `src/presentation/bureaucrat_animation.py` and its caller in `src/presentation/window.py` so animation selection uses the active workflow recipient as presentation state: a newly selected next recipient starts/resets the `IDLE` loop even when its workflow `served` flag is already true, while the previously completed handover may retain its completion animation until the next step is assigned.
+- [X] T054 [US3] Remove all Civil Servant debug/developer-only text drawing from `src/presentation/renderer.py`; retain only explicitly specified gameplay labels and feedback, and ensure the removal does not hide document requirements, served state, or interaction guidance.
+- [X] T055 [P] [US2] Update `specs/002-bureaucracy-document-workflow/quickstart.md` and `README.md` with the repeated-recipient idle-animation rule and the prohibition on Civil Servant debug text.
+
+### Validation
+
+- [ ] T056 Run `./.venv/bin/python -m pytest`, then manually verify a repeated random recipient returns to the idle animation before approach and that no Civil Servant debug text remains in the rendered game, recording the result in `specs/002-bureaucracy-document-workflow/quickstart.md`.
+
+**Checkpoint**: The clarified animation and presentation behavior is covered by tests, implemented without changing workflow validity, and manually confirmed in the playable game.
+
+## Phase 9: Animation-Only Civil Servant Status
+
+**Purpose**: Apply the latest clarification so a Civil Servant's workflow status is communicated exclusively by its animation, with no `PENDING`/`SERVED` text or other status marker.
+
+- [X] T057 [P] [US3] Extend `tests/smoke/test_launch_contract.py` or add `tests/unit/test_renderer.py` to assert Civil Servant rendering contains no `PENDING` or `SERVED` text and no additional status marker, while the animation manager still exposes distinct idle and completion animation kinds.
+- [X] T058 [US3] Update `src/presentation/renderer.py` to remove the Civil Servant status text and any status-only marker, leaving the animation as the sole Civil Servant status indicator while preserving unrelated workflow feedback elsewhere in the UI.
+- [ ] T059 Run `./.venv/bin/python -m pytest` and manually confirm that active and completed Civil Servants communicate status only through their animations; record the result in `specs/002-bureaucracy-document-workflow/quickstart.md`.
+
+**Checkpoint**: Civil Servant status is conveyed exclusively through animation and all automated regressions remain green.
